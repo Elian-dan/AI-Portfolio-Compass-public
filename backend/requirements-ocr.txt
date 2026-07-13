@@ -1,0 +1,8 @@
+-r requirements.txt
+
+# Optional local OCR dependencies for image/scanned-PDF import.
+# PaddlePaddle wheels differ by OS/CPU/GPU; if this file fails on your machine,
+# install PaddlePaddle from the official command for your platform, then rerun.
+paddleocr==2.10.0
+paddlepaddle==2.6.2
+opencv-contrib-python>=4.8.0,<5.0.0

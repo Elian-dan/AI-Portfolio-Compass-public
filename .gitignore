@@ -1,0 +1,41 @@
+# Local runtime data
+data/
+.runtime/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local auth artifacts and private screenshots
+*_auth_qr.png
+*auth*.png
+*secret*.png
+*token*.png
+
+# Local reports and exports that may contain account data
+exports/
+reports/
+*.csv
+*.xlsx
+*.xls
+*.pdf
+!docs/**/*.pdf
+
+# System
+.DS_Store
