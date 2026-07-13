@@ -9,6 +9,7 @@ import {
   ConfirmDialog,
   CurrencyPill,
   Detail,
+  FutuConnectionCard,
   Home,
   Positions,
   ProfilePage,
@@ -67,6 +68,7 @@ function App() {
   const baseCurrency = scopedDashboard?.portfolio.base_currency ?? "";
   const activeCurrency = displayCurrency || baseCurrency;
   const displayRate = useMemo(() => displayRateFor(scopedDashboard, activeCurrency), [scopedDashboard, activeCurrency]);
+  const emptySystem = Boolean(health?.local_data?.empty && dashboard?.empty && accounts.length === 0 && positions.length === 0);
 
   async function loadAll() {
     const result = await Promise.allSettled([
@@ -247,14 +249,14 @@ function App() {
   }
 
   const content = useMemo(() => {
-    if (active === "首页") return <Home dashboard={scopedDashboard} positions={scopedPositions} tradeReviews={scopedTradeReviews} workflowRuns={workflowRuns} accounts={accounts} selectedAccount={selectedAccount} maskAssets={maskAssets} activeCurrency={activeCurrency} displayRate={displayRate} onGenerateDiagnosis={() => { setProfilePageIntent({ kind: "generate", requestId: Date.now() }); setActive("组合诊断"); }} onOpenDiagnosisReport={(runId) => { setProfilePageIntent({ kind: "open", runId, requestId: Date.now() }); setActive("组合诊断"); }} onOpenCode={(code) => { setSelectedCode(code); setDetailReturnTarget("首页"); setActive("标的详情"); }} />;
+    if (active === "首页") return <Home dashboard={scopedDashboard} positions={scopedPositions} tradeReviews={scopedTradeReviews} workflowRuns={workflowRuns} accounts={accounts} selectedAccount={selectedAccount} maskAssets={maskAssets} activeCurrency={activeCurrency} displayRate={displayRate} emptySystem={emptySystem} health={health} onFutuRefresh={async () => { await loadAll(); }} onFutuSync={refresh} onGenerateDiagnosis={() => { setProfilePageIntent({ kind: "generate", requestId: Date.now() }); setActive("组合诊断"); }} onOpenDiagnosisReport={(runId) => { setProfilePageIntent({ kind: "open", runId, requestId: Date.now() }); setActive("组合诊断"); }} onOpenCode={(code) => { setSelectedCode(code); setDetailReturnTarget("首页"); setActive("标的详情"); }} />;
     if (active === "持仓") return <Positions positions={scopedPositions} layer={layer} setLayer={setLayer} accounts={accounts} selectedAccount={selectedAccount} onOpenCode={(code) => { setSelectedCode(code); setDetailReturnTarget("持仓"); setActive("标的详情"); }} />;
     if (active === "复盘") return <ReviewPage review={review} tradeReviews={scopedTradeReviews} selectedAccount={selectedAccount} accounts={accounts} refreshingMarketData={refreshingTradeMarketData} onRefreshMarketData={refreshTradeReviewMarketData} onSaveIntent={async (reviewId, note, tags, plan) => { await api.updateTradeReviewIntent(reviewId, note, tags, plan); await loadAll(); }} />;
     if (active === "组合诊断") return <ProfilePage profile={profile} positions={scopedPositions} selectedAccount={selectedAccount} accounts={accounts} health={health} setNotice={setNotice} requestConfirm={requestConfirm} homeIntent={profilePageIntent} onHomeIntentHandled={() => setProfilePageIntent(null)} onWorkflowRunsChanged={setWorkflowRuns} />;
     if (active === "标的详情") return <Detail detail={detail} selectedAccount={selectedAccount} onSaveLayer={saveLayer} onGenerateAi={generateAiAnalysis} generatingAi={generatingAi} setDetail={setDetail} setNotice={setNotice} />;
-    if (active === "账户与数据") return <AccountDataPage accounts={accounts} onChanged={loadAll} onImported={async () => { await loadAll(); setNotice("账户数据已导入"); }} setNotice={setNotice} requestConfirm={requestConfirm} onRefresh={refresh} loading={loading} />;
+    if (active === "账户与数据") return <AccountDataPage accounts={accounts} health={health} emptySystem={emptySystem} onChanged={loadAll} onImported={async () => { await loadAll(); setNotice("账户数据已导入"); }} setNotice={setNotice} requestConfirm={requestConfirm} onRefresh={refresh} onRefreshHealth={loadAll} loading={loading} />;
     return <AdvancedSettingsPage health={health} setNotice={setNotice} requestConfirm={requestConfirm} onDelete={async () => { await api.deleteLocalData(); setNotice("本地数据已删除"); await loadAll(); }} />;
-  }, [active, dashboard, scopedDashboard, accounts, selectedAccount, health, positions, scopedPositions, review, scopedTradeReviews, profile, workflowRuns, profilePageIntent, layer, detail, selectedCode, loading, generatingAi, refreshingTradeMarketData, maskAssets, activeCurrency, displayRate]);
+  }, [active, dashboard, scopedDashboard, accounts, selectedAccount, health, positions, scopedPositions, review, scopedTradeReviews, profile, workflowRuns, profilePageIntent, layer, detail, selectedCode, loading, generatingAi, refreshingTradeMarketData, maskAssets, activeCurrency, displayRate, emptySystem]);
 
   const showPortfolioHeaderControls = ["首页", "持仓", "复盘"].includes(active);
 

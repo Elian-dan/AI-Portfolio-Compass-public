@@ -103,11 +103,37 @@ def health(db: Session = Depends(get_db)) -> dict:
         db_status = f"error: {str(exc)[:120]}"
 
     connected, opend_status = _opend_health_with_timeout()
+    futu_accounts = 0
+    futu_account_access = False
+    futu_account_message = "OpenD 未连接"
+    if connected:
+        try:
+            futu_account_access, futu_accounts, futu_account_message = FutuReadOnlyAdapter().account_access()
+        except Exception as exc:  # pragma: no cover - depends on local OpenD
+            futu_account_message = str(exc)[:160]
+    local_counts = {
+        "accounts": db.scalar(select(func.count()).select_from(Account)) or 0,
+        "account_snapshots": db.scalar(select(func.count()).select_from(AccountSnapshot)) or 0,
+        "positions": db.scalar(select(func.count()).select_from(PositionSnapshot)) or 0,
+        "deals": db.scalar(select(func.count()).select_from(Deal)) or 0,
+    }
     runtime = active_ai_runtime(db)
     return {
         "service": "ok",
         "database": db_status,
         "opend": "connected" if connected else opend_status,
+        "futu": {
+            "host": settings.futu_host,
+            "port": settings.futu_port,
+            "opend_connected": connected,
+            "account_access": futu_account_access,
+            "account_count": futu_accounts,
+            "message": futu_account_message,
+        },
+        "local_data": {
+            **local_counts,
+            "empty": not any(local_counts.values()),
+        },
         "sqlite_encryption_ready": False,
         "ai": {
             "provider": runtime["provider"],

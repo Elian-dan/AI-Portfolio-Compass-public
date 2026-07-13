@@ -14,6 +14,10 @@ const emptyIntentTags: TradeIntentTags = { trend: [], market: [], fundamental: [
 const emptyIntentPlan: TradeIntentPlan = { holding_period: "", stop_loss_type: "", take_profit_type: "", stop_loss_price: "", take_profit_price: "" };
 let assetMaskEnabled = false;
 
+export function SpaceBetweenTags({ children }: { children: ReactNode }) {
+  return <span className="space-between-tags">{children}</span>;
+}
+
 export function setAssetMaskEnabled(enabled: boolean) {
   assetMaskEnabled = enabled;
 }
@@ -146,6 +150,66 @@ type ConfirmOptions = {
 };
 type ProfilePageIntent = { kind: "generate" | "open"; runId?: string; requestId: number } | null;
 
+export function FutuConnectionCard({ health, onRefresh, onSync }: { health: HealthStatus | null; onRefresh: () => Promise<void>; onSync: () => Promise<void> }) {
+  const [checking, setChecking] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const futu = health?.futu;
+  const connected = Boolean(futu?.opend_connected || health?.opend === "connected");
+  const accountAccess = Boolean(futu?.account_access);
+  const accountCount = futu?.account_count ?? 0;
+  const status = !connected ? "offline" : !accountAccess ? "auth" : accountCount ? "discovered" : "empty";
+  const statusCopy = {
+    offline: { title: "连接 Futu 账户", label: "OpenD 未连接", body: `请先启动并登录 Futu / moomoo OpenD。系统会连接 ${futu?.host || "127.0.0.1"}:${futu?.port || 11111}，不会在这里接收券商密码。`, color: "orange" },
+    auth: { title: "OpenD 已连接，等待账户授权", label: "需要检查登录", body: futu?.message || "请确认 OpenD 已登录正确的账户，并已完成账户授权。", color: "orange" },
+    discovered: { title: `已发现 ${accountCount} 个 Futu 账户`, label: "可以首次同步", body: "首次同步会读取账户资产、持仓和成交记录，账户会自动出现在账户列表中。", color: "blue" },
+    empty: { title: "OpenD 已连接，但尚未发现账户", label: "等待账户", body: "请确认 OpenD 登录的是有交易账户的 Futu 账号，并检查账户授权和市场权限。", color: "orange" },
+  }[status];
+
+  async function refreshConnection() {
+    setChecking(true);
+    try { await onRefresh(); } finally { setChecking(false); }
+  }
+
+  async function syncFutu() {
+    setSyncing(true);
+    try { await onSync(); } finally { setSyncing(false); }
+  }
+
+  return (
+    <section className="panel futu-connection-card">
+      <div className="futu-connection-main">
+        <div>
+          <span className="section-kicker">首次接入</span>
+          <h2>{statusCopy.title}</h2>
+          <p>{statusCopy.body}</p>
+        </div>
+        <Tag color={statusCopy.color}>{statusCopy.label}</Tag>
+      </div>
+      <div className="futu-connection-actions">
+        {status === "discovered" ? (
+          <Button type="primary" loading={syncing} onClick={syncFutu}>首次同步</Button>
+        ) : (
+          <Button type="primary" loading={checking} onClick={refreshConnection}>{status === "offline" ? "启动 OpenD 后检查" : "检查登录和账户授权"}</Button>
+        )}
+        <Button onClick={refreshConnection} disabled={checking || syncing}>重新检查</Button>
+        <Button onClick={() => setShowHelp((value) => !value)}>{showHelp ? "收起说明" : "查看说明"}</Button>
+      </div>
+      {showHelp ? (
+        <div className="futu-connection-help">
+          <strong>接入步骤</strong>
+          <ol>
+            <li>启动并登录 Futu / moomoo OpenD。</li>
+            <li>确认 OpenD 监听地址为 {futu?.host || "127.0.0.1"}:{futu?.port || 11111}。</li>
+            <li>回到这里点击检查，再点击首次同步。</li>
+          </ol>
+          <small>券商密码只在 OpenD 中使用；本系统只读取数据，不执行下单、撤单或改单。</small>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function Home({
   dashboard,
   positions,
@@ -156,6 +220,10 @@ export function Home({
   maskAssets,
   activeCurrency,
   displayRate,
+  emptySystem,
+  health,
+  onFutuRefresh,
+  onFutuSync,
   onGenerateDiagnosis,
   onOpenDiagnosisReport,
   onOpenCode,
@@ -169,6 +237,10 @@ export function Home({
   maskAssets: boolean;
   activeCurrency: string;
   displayRate: number;
+  emptySystem: boolean;
+  health: HealthStatus | null;
+  onFutuRefresh: () => Promise<void>;
+  onFutuSync: () => Promise<void>;
   onGenerateDiagnosis: () => void;
   onOpenDiagnosisReport: (runId: string) => void;
   onOpenCode: (code: string) => void;
@@ -230,6 +302,7 @@ export function Home({
   });
   return (
     <div className="stack home-page">
+      {emptySystem ? <FutuConnectionCard health={health} onRefresh={onFutuRefresh} onSync={onFutuSync} /> : null}
       {!dashboard || dashboard.empty ? (
         <Empty title="暂无持仓数据" body="连接 OpenD 并刷新后，这里会显示组合风险、持仓事项和数据状态。" />
       ) : (
@@ -533,7 +606,7 @@ export function pieColor(index: number) {
   return ["#2563eb", "#16a34a", "#f59e0b", "#0ea5e9", "#ef4444", "#64748b", "#8b5cf6", "#14b8a6"][index % 8];
 }
 
-export function AccountDataPage({ accounts, onChanged, onImported, setNotice, requestConfirm, onRefresh, loading }: { accounts: AccountSummary[]; onChanged: () => Promise<void>; onImported: () => Promise<void>; setNotice: (notice: string) => void; requestConfirm: (options: ConfirmOptions) => Promise<boolean>; onRefresh: () => Promise<void>; loading: boolean }) {
+export function AccountDataPage({ accounts, health, emptySystem, onChanged, onImported, setNotice, requestConfirm, onRefresh, onRefreshHealth, loading }: { accounts: AccountSummary[]; health: HealthStatus | null; emptySystem: boolean; onChanged: () => Promise<void>; onImported: () => Promise<void>; setNotice: (notice: string) => void; requestConfirm: (options: ConfirmOptions) => Promise<boolean>; onRefresh: () => Promise<void>; onRefreshHealth: () => Promise<void>; loading: boolean }) {
   const [activeTab, setActiveTab] = useState("data");
   return (
     <div className="stack account-data-page">
@@ -544,15 +617,18 @@ export function AccountDataPage({ accounts, onChanged, onImported, setNotice, re
         </Tabs>
       </section>
       {activeTab === "data" ? (
-        <DataPage accounts={accounts} onImported={onImported} setNotice={setNotice} requestConfirm={requestConfirm} onRefresh={onRefresh} loading={loading} showAccountManagementLink onOpenAccounts={() => setActiveTab("accounts")} />
+        <>
+          {emptySystem ? <FutuConnectionCard health={health} onRefresh={onRefreshHealth} onSync={onRefresh} /> : null}
+          <DataPage accounts={accounts} onImported={onImported} setNotice={setNotice} requestConfirm={requestConfirm} onRefresh={onRefresh} loading={loading} showAccountManagementLink onOpenAccounts={() => setActiveTab("accounts")} />
+        </>
       ) : (
-        <AccountsAdminPage accounts={accounts} onChanged={onChanged} setNotice={setNotice} requestConfirm={requestConfirm} />
+        <AccountsAdminPage accounts={accounts} onChanged={onChanged} setNotice={setNotice} requestConfirm={requestConfirm} onConnectFutu={async () => { setActiveTab("data"); await onRefresh(); }} />
       )}
     </div>
   );
 }
 
-export function AccountsAdminPage({ accounts, onChanged, setNotice, requestConfirm }: { accounts: AccountSummary[]; onChanged: () => Promise<void>; setNotice: (notice: string) => void; requestConfirm: (options: ConfirmOptions) => Promise<boolean> }) {
+export function AccountsAdminPage({ accounts, onChanged, setNotice, requestConfirm, onConnectFutu }: { accounts: AccountSummary[]; onChanged: () => Promise<void>; setNotice: (notice: string) => void; requestConfirm: (options: ConfirmOptions) => Promise<boolean>; onConnectFutu: () => Promise<void> }) {
   const [editing, setEditing] = useState<AccountSummary | null>(null);
   const [form, setForm] = useState(accountFormDefaults());
   const [modalOpen, setModalOpen] = useState(false);
@@ -658,7 +734,7 @@ export function AccountsAdminPage({ accounts, onChanged, setNotice, requestConfi
   const accountTable = useResizableTableColumns({
     display_name: 180,
     account_id: 170,
-    source_name: 150,
+    source_name: 170,
     import_mode: 190,
     data_providers: 190,
     base_currency: 110,
@@ -673,9 +749,12 @@ export function AccountsAdminPage({ accounts, onChanged, setNotice, requestConfi
         <div className="toolbar">
           <div>
             <h2>账户列表</h2>
-            <small>停用账户不会出现在下方数据模块的账户 Tab 中</small>
+            <small>Futu / OpenD 账户通过首次同步自动创建；手动账户用于 Excel、PDF 或截图导入。</small>
           </div>
-          <Button type="primary" onClick={() => { setEditing(null); setForm(accountFormDefaults()); setModalOpen(true); }}>新增账户</Button>
+          <div className="account-list-actions">
+            <Button onClick={onConnectFutu}>连接 Futu 账户</Button>
+            <Button type="primary" onClick={() => { setEditing(null); setForm(accountFormDefaults()); setModalOpen(true); }}>新增手动账户</Button>
+          </div>
         </div>
         {accounts.length ? (
           <Table
@@ -702,13 +781,13 @@ export function AccountsAdminPage({ accounts, onChanged, setNotice, requestConfi
               },
               { title: "账户 ID", dataIndex: "account_id", ...accountTable.columnProps("account_id"), sorter: (a: AccountSummary, b: AccountSummary) => a.account_id.localeCompare(b.account_id) },
               {
-                title: "数据来源",
+                title: "账户来源",
                 dataIndex: "source_name",
                 ...accountTable.columnProps("source_name"),
-                filters: Array.from(new Set(accounts.map((account) => account.source_name))).map((source) => ({ text: sourceLabel(source), value: source })),
-                onFilter: (value, row: AccountSummary) => row.source_name === value,
-                sorter: (a: AccountSummary, b: AccountSummary) => sourceLabel(a.source_name).localeCompare(sourceLabel(b.source_name)),
-                render: (_value, account: AccountSummary) => sourceLabel(account.source_name),
+                filters: [{ text: "Futu / OpenD", value: "futu" }, { text: "手动导入", value: "manual" }],
+                onFilter: (value, row: AccountSummary) => accountSourceKind(row) === value,
+                sorter: (a: AccountSummary, b: AccountSummary) => accountSourceLabel(a).localeCompare(accountSourceLabel(b)),
+                render: (_value, account: AccountSummary) => <SpaceBetweenTags><Tag color={accountSourceKind(account) === "futu" ? "blue" : "gray"}>{accountSourceLabel(account)}</Tag><Tag color="arcoblue">{accountImportCapabilityLabel(account)}</Tag></SpaceBetweenTags>,
               },
               { title: "导入方式", ...accountTable.columnProps("import_mode"), render: (_value, account: AccountSummary) => accountImportConfigLabel(account) },
               { title: "数据源配置", ...accountTable.columnProps("data_providers"), render: (_value, account: AccountSummary) => accountProviderConfigLabel(account) },
@@ -761,9 +840,6 @@ export function AccountsAdminPage({ accounts, onChanged, setNotice, requestConfi
               <Form.Item label="账户名称" required>
                 <Input autoFocus value={form.display_name} placeholder="例如：Futu 美股账户、支付宝理财" onChange={(value) => setForm({ ...form, display_name: value })} />
               </Form.Item>
-              <Form.Item label="数据来源">
-                <StyledSelect value={form.source_name} ariaLabel="选择数据来源" options={[{ value: "manual", label: "手动账户" }, { value: "futu", label: "Futu" }, { value: "excel", label: "Excel" }, { value: "file", label: "文件" }, { value: "alipay", label: "支付宝" }, { value: "citic_ths", label: "中信证券" }]} onChange={(value) => setForm({ ...form, source_name: value })} />
-              </Form.Item>
               <Form.Item label="机构/平台">
                 <Input value={form.institution} placeholder="例如：富途、支付宝、中信证券" onChange={(value) => setForm({ ...form, institution: value })} />
               </Form.Item>
@@ -776,16 +852,19 @@ export function AccountsAdminPage({ accounts, onChanged, setNotice, requestConfi
               <Form.Item label="覆盖市场">
                 <Input value={form.markets} placeholder="例如：US,HK,CN" onChange={(value) => setForm({ ...form, markets: value })} />
               </Form.Item>
+              <Form.Item label="账户来源">
+                <SpaceBetweenTags><Tag color={isFutuAccount(editing) ? "blue" : "gray"}>{isFutuAccount(editing) ? "Futu · OpenD" : "手动导入"}</Tag><small className="metadata-note">来源由创建方式决定，不能在这里修改。</small></SpaceBetweenTags>
+              </Form.Item>
               <Form.Item label="持仓数据导入方式" required>
                 <div className="checkbox-stack">
-                  <Checkbox checked={form.position_import_modes.includes("api")} onChange={(checked) => setForm({ ...form, position_import_modes: toggleImportMode(form.position_import_modes, "api", checked) })}>API 导入</Checkbox>
-                  <Checkbox checked={form.position_import_modes.includes("local")} onChange={(checked) => setForm({ ...form, position_import_modes: toggleImportMode(form.position_import_modes, "local", checked) })}>本地导入</Checkbox>
+                  <Checkbox disabled={isFutuAccount(editing)} checked={isFutuAccount(editing) || form.position_import_modes.includes("api")} onChange={(checked) => setForm({ ...form, position_import_modes: toggleImportMode(form.position_import_modes, "api", checked) })}>API 导入</Checkbox>
+                  <Checkbox disabled={isFutuAccount(editing)} checked={!isFutuAccount(editing) && form.position_import_modes.includes("local")} onChange={(checked) => setForm({ ...form, position_import_modes: toggleImportMode(form.position_import_modes, "local", checked) })}>本地导入</Checkbox>
                 </div>
               </Form.Item>
               <Form.Item label="复盘数据导入方式" required>
                 <div className="checkbox-stack">
-                  <Checkbox checked={form.review_import_modes.includes("api")} onChange={(checked) => setForm({ ...form, review_import_modes: toggleImportMode(form.review_import_modes, "api", checked) })}>API 导入</Checkbox>
-                  <Checkbox checked={form.review_import_modes.includes("local")} onChange={(checked) => setForm({ ...form, review_import_modes: toggleImportMode(form.review_import_modes, "local", checked) })}>本地导入</Checkbox>
+                  <Checkbox disabled={isFutuAccount(editing)} checked={isFutuAccount(editing) || form.review_import_modes.includes("api")} onChange={(checked) => setForm({ ...form, review_import_modes: toggleImportMode(form.review_import_modes, "api", checked) })}>API 导入</Checkbox>
+                  <Checkbox disabled={isFutuAccount(editing)} checked={!isFutuAccount(editing) && form.review_import_modes.includes("local")} onChange={(checked) => setForm({ ...form, review_import_modes: toggleImportMode(form.review_import_modes, "local", checked) })}>本地导入</Checkbox>
                 </div>
               </Form.Item>
               <Form.Item label="行情数据配置">
@@ -3230,7 +3309,7 @@ export function AccountRail({ accounts, activeAccountId, overview, onSelect }: {
             >
               <span className="account-rail-main">
                 <strong>{account.display_name || account.account_id}</strong>
-                <small>{sourceLabel(account.source_name)} · {account.base_currency}</small>
+                <small><Tag color={accountSourceKind(account) === "futu" ? "blue" : "gray"}>{accountSourceLabel(account)}</Tag> · {account.base_currency}</small>
               </span>
               <span className="account-rail-assets">{formatMoney(account.display_total_assets ?? account.total_assets ?? 0, account.display_currency || account.base_currency)}</span>
               <span className="account-rail-meta">
@@ -3253,7 +3332,7 @@ export function AccountOverviewHeader({ account, overview, showAccountManagement
         <div>
           <span className="section-kicker">当前账户</span>
           <h2>{account.display_name || account.account_id}</h2>
-          <small>{sourceLabel(account.source_name)} · {importModeLabel(importModesForAccount(account))} · 基准币种 {account.base_currency}</small>
+          <small><Tag color={accountSourceKind(account) === "futu" ? "blue" : "gray"}>{accountSourceLabel(account)}</Tag> · {accountImportCapabilityLabel(account)} · 基准币种 {account.base_currency}</small>
         </div>
         <div className="account-overview-actions">
           <Tag color={account.enabled ? "green" : "gray"}>{account.enabled ? "启用" : "停用"}</Tag>
@@ -5143,6 +5222,22 @@ export function sourceLabel(source: string) {
     file: "文件",
   };
   return names[source] ?? source;
+}
+
+export function isFutuAccount(account: AccountSummary | null | undefined) {
+  return Boolean(account?.broker_provider === "futu" || account?.source_name === "futu");
+}
+
+export function accountSourceKind(account: AccountSummary) {
+  return isFutuAccount(account) ? "futu" : "manual";
+}
+
+export function accountSourceLabel(account: AccountSummary) {
+  return isFutuAccount(account) ? "Futu · OpenD" : "手动导入";
+}
+
+export function accountImportCapabilityLabel(account: AccountSummary) {
+  return isFutuAccount(account) ? "只读 API" : "Excel / 文件";
 }
 
 export function accountName(accounts: AccountSummary[], accountId: string) {

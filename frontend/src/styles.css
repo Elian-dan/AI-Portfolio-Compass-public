@@ -1156,6 +1156,56 @@ ol:last-child {
   padding: var(--card-padding);
 }
 
+.futu-connection-card {
+  border-left: 3px solid rgb(var(--arcoblue-5));
+}
+
+.futu-connection-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.futu-connection-main h2 {
+  margin: 0;
+}
+
+.futu-connection-main p {
+  max-width: 760px;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-2);
+}
+
+.futu-connection-actions,
+.account-list-actions,
+.space-between-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.futu-connection-actions {
+  margin-top: var(--space-4);
+}
+
+.futu-connection-help {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-2);
+  color: var(--color-text-2);
+}
+
+.futu-connection-help ol {
+  margin: var(--space-2) 0;
+  padding-left: 22px;
+}
+
+.futu-connection-help small {
+  color: var(--color-text-3);
+}
+
 .account-rail-heading,
 .account-overview-title,
 .account-overview-strip,

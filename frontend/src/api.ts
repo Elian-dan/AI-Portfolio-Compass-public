@@ -14,6 +14,21 @@ export type HealthStatus = {
   database: string;
   opend: string;
   sqlite_encryption_ready: boolean;
+  local_data?: {
+    accounts: number;
+    account_snapshots: number;
+    positions: number;
+    deals: number;
+    empty: boolean;
+  };
+  futu?: {
+    host: string;
+    port: number;
+    opend_connected: boolean;
+    account_access: boolean;
+    account_count: number;
+    message: string;
+  };
   ai?: {
     provider: string;
     display_name?: string;

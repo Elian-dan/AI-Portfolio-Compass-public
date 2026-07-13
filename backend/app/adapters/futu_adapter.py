@@ -46,6 +46,15 @@ class FutuReadOnlyAdapter:
         except Exception as exc:  # pragma: no cover - depends on OpenD
             return False, _safe_error(exc)
 
+    def account_access(self) -> tuple[bool, int, str]:
+        """Check whether the logged-in OpenD session can read trading accounts."""
+        try:
+            futu = self._import_futu()
+            accounts = self._fetch_accounts(futu)
+            return True, len(accounts), "账户列表读取成功"
+        except Exception as exc:  # pragma: no cover - depends on local OpenD
+            return False, 0, _safe_error(exc)
+
     def fetch_snapshot(self) -> FutuSnapshot:
         futu = self._import_futu()
         now = datetime.now(timezone.utc)
