@@ -8,7 +8,6 @@ import re
 from typing import Any, TYPE_CHECKING
 
 from app.models import Account, SyncTask
-from app.services.ocr import OCRError, get_ocr_provider
 from app.services.sync import mark_source_state, persist_snapshot
 
 if TYPE_CHECKING:
@@ -26,23 +25,21 @@ class ImportSnapshot:
     news: list[dict[str, Any]] = field(default_factory=list)
 
 
-def preview_import(source: str, filename: str, content: bytes, account_id: str = "") -> dict[str, Any]:
+def preview_import(source: str, filename: str, content: bytes, account_id: str = "", base_currency: str = "CNY") -> dict[str, Any]:
     source = _normalize_source(source)
     file_hash = hashlib.sha256(content).hexdigest()
     if source == "excel":
-        snapshot, errors, warnings = _parse_excel_import(content, file_hash, account_id)
-    elif source == "file":
-        snapshot, errors, warnings = _parse_file_import(filename, content, file_hash, account_id)
+        snapshot, errors, warnings = _parse_excel_import(content, file_hash, account_id, base_currency)
     elif source == "alipay":
         snapshot = _parse_alipay_pdf(content, file_hash)
         errors, warnings = [], []
     elif source == "elebank":
         snapshot = _elebank_screenshot_template(file_hash)
-        errors, warnings = [], ["当前来源仍使用模板兜底，未做真实图片 OCR 识别"]
+        errors, warnings = [], ["当前来源仍使用模板兜底，未解析真实图片内容"]
     elif source in {"citic", "citic_ths"}:
         snapshot = _citic_screenshot_template(file_hash)
         source = "citic_ths"
-        errors, warnings = [], ["当前来源仍使用模板兜底，未做真实图片 OCR 识别"]
+        errors, warnings = [], ["当前来源仍使用模板兜底，未解析真实图片内容"]
     else:
         raise ValueError("unsupported import source")
 
@@ -57,6 +54,8 @@ def preview_import(source: str, filename: str, content: bytes, account_id: str =
         "account_snapshot": snapshot.account_snapshots[0] if snapshot.account_snapshots else {},
         "positions": snapshot.positions,
         "position_count": len(snapshot.positions),
+        "deals": snapshot.deals,
+        "deal_count": len(snapshot.deals),
         "total_assets": sum(item.get("total_assets", 0) for item in snapshot.account_snapshots),
         "market_value": sum(item.get("market_value", 0) for item in snapshot.account_snapshots),
         "cash": sum(item.get("cash", 0) for item in snapshot.account_snapshots),
@@ -128,7 +127,7 @@ def confirm_import(db: "Session", preview: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _parse_excel_import(content: bytes, file_hash: str, account_id: str) -> tuple[ImportSnapshot, list[str], list[str]]:
+def _parse_excel_import(content: bytes, file_hash: str, account_id: str, base_currency: str = "CNY") -> tuple[ImportSnapshot, list[str], list[str]]:
     try:
         from openpyxl import load_workbook  # type: ignore
     except Exception as exc:  # pragma: no cover - dependency guard
@@ -187,7 +186,7 @@ def _parse_excel_import(content: bytes, file_hash: str, account_id: str) -> tupl
 
     if "持仓快照" in workbook.sheetnames:
         for row_no, row in _sheet_rows(workbook["持仓快照"]):
-            required = ["snapshot_time", "code", "name", "market", "asset_type", "quantity", "current_price", "market_value", "currency"]
+            required = ["code", "quantity", "current_price"]
             missing = _missing(row, required)
             if missing:
                 errors.append(f"持仓快照 第 {row_no} 行缺少必填字段：{', '.join(missing)}")
@@ -197,9 +196,18 @@ def _parse_excel_import(content: bytes, file_hash: str, account_id: str) -> tupl
                 continue
             active_account_id = active_account_id or row_account
             item_snapshot_time = _parse_datetime_value(row.get("snapshot_time"))
-            market_value = _float(row.get("market_value"))
+            code = str(row.get("code") or "").strip()
+            quantity = _float(row.get("quantity"))
             current_price = _float(row.get("current_price"))
+            market_value = _optional_float(row.get("market_value"))
+            if market_value is None:
+                market_value = quantity * current_price
             average_cost = _float(row.get("average_cost"))
+            market = str(row.get("market") or _market_from_code(code)).strip().upper()
+            asset_type = str(row.get("asset_type") or ("fund" if code.upper().startswith("FUND.") else "stock")).strip()
+            currency = str(row.get("currency") or base_currency or "CNY").strip().upper()
+            normalized_currency = str(row.get("normalized_currency") or base_currency or currency).strip().upper()
+            exchange_rate = _optional_float(row.get("exchange_rate_to_base")) or 1
             profit_loss_ratio = _optional_float(row.get("profit_loss_ratio"))
             if profit_loss_ratio is None and average_cost:
                 profit_loss_ratio = (current_price - average_cost) / average_cost
@@ -209,30 +217,31 @@ def _parse_excel_import(content: bytes, file_hash: str, account_id: str) -> tupl
             positions.append(
                 {
                     "account_id": row_account,
-                    "code": str(row.get("code") or "").strip(),
-                    "name": str(row.get("name") or "").strip(),
-                    "market": str(row.get("market") or "").strip().upper(),
-                    "asset_type": str(row.get("asset_type") or "stock").strip(),
-                    "quantity": _float(row.get("quantity")),
+                    "code": code,
+                    "name": str(row.get("name") or code).strip(),
+                    "market": market,
+                    "asset_type": asset_type,
+                    "quantity": quantity,
                     "average_cost": average_cost,
                     "current_price": current_price,
                     "raw_market_value": market_value,
-                    "raw_currency": str(row.get("currency") or "").upper(),
-                    "normalized_market_value": market_value,
-                    "normalized_currency": str(row.get("currency") or "").upper(),
-                    "exchange_rate_to_base": _optional_float(row.get("exchange_rate_to_base")) or 1,
+                    "raw_currency": currency,
+                    "normalized_market_value": market_value * exchange_rate,
+                    "normalized_currency": normalized_currency,
+                    "exchange_rate_to_base": exchange_rate,
                     "position_weight": _optional_float(row.get("position_weight")) or 0,
                     "profit_loss_ratio": profit_loss_ratio,
+                    "requested_position_layer": str(row.get("position_layer") or "").strip(),
                     "first_buy_time": _optional_datetime(row.get("first_buy_time")),
                     "last_trade_time": _optional_datetime(row.get("last_trade_time")),
-                    "missing_market_code": not _looks_like_market_code(str(row.get("code") or "")),
+                    "missing_market_code": not _looks_like_market_code(code),
                     "snapshot_time": item_snapshot_time,
                 }
             )
 
     if "成交记录" in workbook.sheetnames:
         for row_no, row in _sheet_rows(workbook["成交记录"]):
-            missing = _missing(row, ["deal_id", "code", "side", "price", "quantity", "deal_time"])
+            missing = _missing(row, ["deal_id", "code", "price", "quantity"])
             if missing:
                 errors.append(f"成交记录 第 {row_no} 行缺少必填字段：{', '.join(missing)}")
                 continue
@@ -246,7 +255,7 @@ def _parse_excel_import(content: bytes, file_hash: str, account_id: str) -> tupl
                     "deal_id": str(row.get("deal_id") or "").strip(),
                     "order_id": str(row.get("order_id") or ""),
                     "code": str(row.get("code") or "").strip(),
-                    "side": str(row.get("side") or "").strip().upper(),
+                    "side": _normalize_deal_side(row.get("side")),
                     "price": _float(row.get("price")),
                     "quantity": _float(row.get("quantity")),
                     "deal_time": _parse_datetime_value(row.get("deal_time")),
@@ -265,7 +274,10 @@ def _parse_excel_import(content: bytes, file_hash: str, account_id: str) -> tupl
     if not any(name in workbook.sheetnames for name in ("账户资产快照", "持仓快照", "成交记录")):
         errors.append("Excel 必须至少包含一个 Sheet：账户资产快照、持仓快照、成交记录")
 
-    if active_account_id and not accounts:
+    if not account_snapshots and not positions and not deals:
+        errors.append("Excel 中未识别到可导入的持仓或成交记录，请从第 2 行开始填写数据")
+
+    if active_account_id and not accounts and (account_snapshots or positions or deals):
         accounts.append(_account(active_account_id, "manual", active_account_id, "", "excel", "CNY", file_hash))
 
     total_assets = next((item["total_assets"] for item in account_snapshots if item["account_id"] == active_account_id), 0)
@@ -277,37 +289,6 @@ def _parse_excel_import(content: bytes, file_hash: str, account_id: str) -> tupl
                 item["position_weight"] = item["normalized_market_value"] / total_assets
 
     return ImportSnapshot(accounts=accounts, account_snapshots=account_snapshots, positions=positions, deals=deals), errors, warnings
-
-
-def _parse_file_import(filename: str, content: bytes, file_hash: str, account_id: str) -> tuple[ImportSnapshot, list[str], list[str]]:
-    suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    if suffix == "pdf":
-        try:
-            snapshot = _parse_alipay_pdf(content, file_hash)
-            if account_id:
-                _force_account_id(snapshot, account_id)
-            return snapshot, [], ["文字型 PDF 已优先使用本地 pdfplumber 解析"]
-        except Exception as exc:
-            provider = get_ocr_provider()
-            try:
-                result = provider.extract_text(content, filename)
-            except OCRError as ocr_exc:
-                return ImportSnapshot(accounts=[], account_snapshots=[], positions=[]), [f"{exc}；{ocr_exc}"], []
-            return (
-                ImportSnapshot(accounts=[], account_snapshots=[], positions=[]),
-                ["OCR 已识别文字，但当前没有足够规则把 PDF 自动转换为账户/持仓/成交结构，请改用 Excel 导入"],
-                [f"OCR provider: {result.provider}", result.text[:1000]],
-            )
-    provider = get_ocr_provider()
-    try:
-        result = provider.extract_text(content, filename)
-    except OCRError as exc:
-        return ImportSnapshot(accounts=[], account_snapshots=[], positions=[]), [str(exc)], []
-    return (
-        ImportSnapshot(accounts=[], account_snapshots=[], positions=[]),
-        ["OCR 已识别文字，但当前没有足够规则把截图自动转换为账户/持仓/成交结构，请改用 Excel 导入"],
-        [f"OCR provider: {result.provider}", result.text[:1000]],
-    )
 
 
 def _parse_alipay_pdf(content: bytes, file_hash: str) -> ImportSnapshot:
@@ -611,13 +592,46 @@ def _sheet_rows(sheet: Any) -> list[tuple[int, dict[str, Any]]]:
     rows = list(sheet.iter_rows(values_only=True))
     if not rows:
         return []
-    headers = [str(value or "").strip() for value in rows[0]]
+    headers = [_canonical_excel_header(value) for value in rows[0]]
     result = []
     for index, values in enumerate(rows[1:], start=2):
         if not any(value not in (None, "") for value in values):
             continue
         result.append((index, {headers[col]: values[col] if col < len(values) else None for col in range(len(headers)) if headers[col]}))
     return result
+
+
+EXCEL_HEADER_ALIASES = {
+    "标的代码*": "code", "标的代码": "code", "标的名称": "name", "数量*": "quantity", "数量": "quantity",
+    "当前价格*": "current_price", "当前价格": "current_price", "平均成本": "average_cost", "市场": "market",
+    "类型": "asset_type", "原币币种": "currency", "折算币种": "normalized_currency", "汇率": "exchange_rate_to_base",
+    "仓位类型": "position_layer", "快照时间": "snapshot_time", "成交号*": "deal_id", "成交号": "deal_id",
+    "成交编号*": "deal_id", "成交编号": "deal_id", "订单号": "order_id", "订单编号": "order_id",
+    "方向": "side", "买卖方向*": "side", "买卖方向": "side", "价格*": "price", "价格": "price",
+    "成交价格*": "price", "成交价格": "price", "成交数量*": "quantity", "成交数量": "quantity",
+    "成交时间*": "deal_time", "成交时间": "deal_time",
+}
+
+
+def _canonical_excel_header(value: Any) -> str:
+    header = str(value or "").strip()
+    return EXCEL_HEADER_ALIASES.get(header, header)
+
+
+def _market_from_code(value: str) -> str:
+    prefix = value.strip().upper().split(".", 1)[0]
+    if prefix in {"SH", "SZ", "CN", "FUND"}:
+        return "CN"
+    return prefix if prefix in {"US", "HK"} else ""
+
+
+def _normalize_deal_side(value: Any) -> str:
+    side = str(value or "买入").strip().upper()
+    if side in {"买入", "BUY", "B"}:
+        return "BUY"
+    if side in {"卖出", "SELL", "S"}:
+        return "SELL"
+    return side
 
 
 def _missing(row: dict[str, Any], fields: list[str]) -> list[str]:

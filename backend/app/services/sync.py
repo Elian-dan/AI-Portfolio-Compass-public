@@ -237,6 +237,7 @@ def persist_snapshot(db: Session, sync_id: str, snapshot) -> tuple[int, int]:
     for payload in snapshot.positions:
         stats = deal_stats[payload["code"]]
         override = override_by_code.get(payload["code"])
+        requested_layer = payload.pop("requested_position_layer", "")
         facts = PositionFacts(
             code=payload["code"],
             asset_type=payload["asset_type"],
@@ -247,7 +248,7 @@ def persist_snapshot(db: Session, sync_id: str, snapshot) -> tuple[int, int]:
             has_round_trip=stats["buy_count"] > 0 and stats["sell_count"] > 0,
             profit_loss_ratio=payload["profit_loss_ratio"],
             is_leveraged_etf=payload["asset_type"] == "leveraged_etf",
-            manual_layer=override.position_layer if override else None,
+            manual_layer=override.position_layer if override else requested_layer if requested_layer in POSITION_LAYERS else None,
             data_days=stats["data_days"],
             now=now,
         )

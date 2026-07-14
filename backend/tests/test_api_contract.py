@@ -70,7 +70,14 @@ def test_excel_import_template_download_contract():
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     workbook = load_workbook(BytesIO(response.content), read_only=True)
-    assert workbook.sheetnames == ["账户资产快照", "持仓快照", "成交记录"]
+    assert workbook.sheetnames == ["持仓快照"]
+    assert [cell.value for cell in workbook["持仓快照"][1]][:5] == ["标的代码*", "标的名称", "数量*", "当前价格*", "平均成本"]
+
+    with TestClient(app) as client:
+        response = client.get("/api/import/excel/template?context=deal")
+    deal_workbook = load_workbook(BytesIO(response.content), read_only=True)
+    assert deal_workbook.sheetnames == ["成交记录"]
+    assert [cell.value for cell in deal_workbook["成交记录"][1]] == ["成交号*", "订单号", "标的代码*", "市场", "方向", "价格*", "数量*", "成交时间"]
 
 
 def test_dashboard_includes_freshness_matrix(monkeypatch):
@@ -827,23 +834,77 @@ def test_excel_preview_validates_required_fields_and_imports_rows():
         _cleanup_account(account_id)
 
 
-def test_file_preview_reports_unavailable_ocr_for_images(monkeypatch):
-    from app.services import imports as import_service
-    from app.services.ocr import DisabledOCRProvider
-
-    monkeypatch.setattr(import_service, "get_ocr_provider", lambda: DisabledOCRProvider())
-    account_id = "__ocr_disabled__"
+def test_excel_preview_accepts_position_form_template_fields_only():
+    account_id = "__excel_simple_position__"
     try:
         _create_account(account_id)
+        workbook = Workbook()
+        position = workbook.active
+        position.title = "持仓快照"
+        position.append(["标的代码*", "标的名称", "数量*", "当前价格*", "平均成本"])
+        position.append(["US.AAPL", "Apple", 10, 200, 180])
+        payload = BytesIO()
+        workbook.save(payload)
+
         with TestClient(app) as client:
             response = client.post(
-                f"/api/import/file/preview?account_id={account_id}",
-                files={"file": ("screen.png", b"not-a-real-image", "image/png")},
+                f"/api/import/excel/preview?account_id={account_id}",
+                files={"file": ("position.xlsx", payload.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
             )
         assert response.status_code == 200
-        data = response.json()
-        assert data["can_confirm"] is False
-        assert "本地 OCR 未启用" in data["errors"][0]
+        preview = response.json()
+        assert preview["errors"] == []
+        assert preview["positions"][0]["raw_market_value"] == 2000
+        assert preview["positions"][0]["market"] == "US"
+    finally:
+        _cleanup_account(account_id)
+
+
+def test_excel_preview_accepts_deal_form_template_fields_and_defaults():
+    account_id = "__excel_simple_deal__"
+    try:
+        _create_account(account_id)
+        workbook = Workbook()
+        deal = workbook.active
+        deal.title = "成交记录"
+        deal.append(["成交号*", "订单号", "标的代码*", "市场", "方向", "价格*", "数量*", "成交时间"])
+        deal.append(["deal-1", "", "US.AAPL", "US", "买入", 200, 10, ""])
+        payload = BytesIO()
+        workbook.save(payload)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/api/import/excel/preview?account_id={account_id}",
+                files={"file": ("deal.xlsx", payload.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            )
+        assert response.status_code == 200
+        preview = response.json()
+        assert preview["errors"] == []
+        assert preview["deal_count"] == 1
+        assert preview["snapshot"]["deals"][0]["side"] == "BUY"
+    finally:
+        _cleanup_account(account_id)
+
+
+def test_excel_preview_rejects_empty_template_with_clear_error():
+    account_id = "__excel_empty_template__"
+    try:
+        _create_account(account_id)
+        workbook = Workbook()
+        deal = workbook.active
+        deal.title = "成交记录"
+        deal.append(["成交号*", "订单号", "标的代码*", "市场", "方向", "价格*", "数量*", "成交时间"])
+        payload = BytesIO()
+        workbook.save(payload)
+
+        with TestClient(app) as client:
+            response = client.post(
+                f"/api/import/excel/preview?account_id={account_id}",
+                files={"file": ("empty.xlsx", payload.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            )
+        preview = response.json()
+        assert preview["can_confirm"] is False
+        assert "第 2 行开始填写" in preview["errors"][0]
     finally:
         _cleanup_account(account_id)
 

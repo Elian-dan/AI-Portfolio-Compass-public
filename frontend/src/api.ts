@@ -189,6 +189,8 @@ export type ImportPreview = {
   account_snapshot: Record<string, unknown>;
   positions: Position[];
   position_count: number;
+  deals: AccountDeal[];
+  deal_count: number;
   total_assets: number;
   market_value: number;
   cash: number;
@@ -717,7 +719,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(preview),
     }),
-  downloadImportTemplate: () => downloadFile("/api/import/excel/template", "ai-portfolio-import-template.xlsx"),
+  downloadImportTemplate: (context: "position" | "deal" = "position") => downloadFile(`/api/import/excel/template?context=${context}`, `ai-portfolio-${context}-template.xlsx`),
   manualSync: () => request<{ sync_id: string; status: string; message: string }>("/api/sync/manual", { method: "POST" }),
   generateDecisionCards: (consentExternalAi = false, model?: string, systemPrompt?: string) =>
     request<{ status: string; model?: string; prompt_hash?: string; generated_count: number; failed: Array<{ code: string; error: string }> }>("/api/decision-cards/generate-ai", {

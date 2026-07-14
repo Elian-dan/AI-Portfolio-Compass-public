@@ -360,12 +360,13 @@ def delete_account(account_id: str, confirm_with_data: bool = Query(False), db: 
 
 
 @app.post("/api/import/{source}/preview")
-async def import_preview(source: str, account_id: str = Query(""), file: UploadFile = File(...)) -> dict:
+async def import_preview(source: str, account_id: str = Query(""), file: UploadFile = File(...), db: Session = Depends(get_db)) -> dict:
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty import file")
     try:
-        return preview_import(source, file.filename or "import", content, account_id)
+        account = db.get(Account, account_id) if account_id else None
+        return preview_import(source, file.filename or "import", content, account_id, account.base_currency if account else "CNY")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -381,24 +382,19 @@ def import_confirm(source: str, payload: dict = Body(default_factory=dict), db: 
 
 
 @app.get("/api/import/excel/template")
-def import_excel_template() -> StreamingResponse:
-    sheets = [
-        (
-            "账户资产快照",
-            ["account_id", "snapshot_time", "total_assets", "cash", "market_value", "currency", "source_name", "display_name", "institution", "account_type", "today_pnl", "floating_pnl", "raw_note"],
-            ["acct_demo", "2026-07-05 15:30:00", 100000, 12000, 88000, "CNY", "manual", "示例账户", "示例券商", "cash", 300, 1200, "示例行可删除"],
-        ),
-        (
-            "持仓快照",
-            ["account_id", "snapshot_time", "code", "name", "market", "asset_type", "quantity", "average_cost", "current_price", "market_value", "currency", "profit_loss_ratio", "position_weight", "exchange_rate_to_base", "first_buy_time", "last_trade_time"],
-            ["acct_demo", "2026-07-05 15:30:00", "US.AAPL", "Apple", "US", "stock", 10, 180, 200, 2000, "USD", 0.1111, 0.02, 7.2, "2026-01-10 22:30:00", "2026-06-20 22:30:00"],
-        ),
-        (
+def import_excel_template(context: str = Query("position")) -> StreamingResponse:
+    if context == "deal":
+        sheets = [(
             "成交记录",
-            ["account_id", "deal_id", "order_id", "code", "side", "price", "quantity", "deal_time", "market", "amount", "currency", "fee", "commission", "tax", "raw_note"],
-            ["acct_demo", "deal_demo_001", "order_demo_001", "US.AAPL", "BUY", 180, 10, "2026-01-10 22:30:00", "US", 1800, "USD", 1, 1, 0, "示例行可删除"],
-        ),
-    ]
+            ["成交号*", "订单号", "标的代码*", "市场", "方向", "价格*", "数量*", "成交时间"],
+            [None, None, None, None, None, None, None, None],
+        )]
+    else:
+        sheets = [(
+            "持仓快照",
+            ["标的代码*", "标的名称", "数量*", "当前价格*", "平均成本", "市场", "类型", "原币币种", "折算币种", "汇率", "仓位类型", "快照时间"],
+            [None, None, None, None, None, None, None, None, None, None, None, None],
+        )]
 
     try:
         output = _openpyxl_template(sheets)
@@ -447,7 +443,10 @@ def _xlsx_template_without_openpyxl(sheets: list[tuple[str, list[str], list[obje
         archive.writestr("xl/_rels/workbook.xml.rels", _xlsx_workbook_relationships(len(sheets)))
         archive.writestr("xl/styles.xml", _xlsx_styles())
         for index, (_title, headers, sample) in enumerate(sheets, start=1):
-            archive.writestr(f"xl/worksheets/sheet{index}.xml", _xlsx_sheet([headers, sample]))
+            rows = [headers]
+            if any(value not in (None, "") for value in sample):
+                rows.append(sample)
+            archive.writestr(f"xl/worksheets/sheet{index}.xml", _xlsx_sheet(rows))
     return output
 
 

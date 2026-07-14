@@ -43,10 +43,6 @@ class Settings:
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     deepseek_model: str = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
     deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-    ocr_provider: str = os.getenv("OCR_PROVIDER", "disabled")
-    ocr_local_engine: str = os.getenv("OCR_LOCAL_ENGINE", "paddleocr")
-    ocr_lang: str = os.getenv("OCR_LANG", "ch")
-
     @property
     def sqlite_encryption_ready(self) -> bool:
         return bool(self.db_encryption_key)

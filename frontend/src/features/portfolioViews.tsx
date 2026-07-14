@@ -3044,16 +3044,23 @@ export function DataPage({ accounts, onImported, setNotice, requestConfirm, onRe
       .catch((error) => setNotice(error instanceof Error ? error.message : "账户数据加载失败"));
   }, [activeAccountId, activeAccountConfigKey]);
 
-  async function chooseImport(source: "file" | "excel", file: File | null) {
+  async function chooseImport(file: File | null) {
     if (!file || !activeAccountId) return;
     setImporting(true);
     setPreview(null);
-    setNotice(source === "excel" ? "正在校验 Excel 数据" : "正在解析文件");
+    setNotice("正在校验 Excel 数据");
     try {
-      const result = await api.importPreview(source, file, activeAccountId);
+      const result = await api.importPreview("excel", file, activeAccountId);
       setPreview(result);
-      const errorText = result.errors?.length ? `，发现 ${result.errors.length} 个错误` : "";
-      setNotice(`已解析 ${formatCount(result.position_count)} 条持仓${errorText}`);
+      if (result.errors?.length) {
+        setNotice(`文件未导入：${result.errors[0]}`);
+        return;
+      }
+      const parsed = [
+        result.position_count ? `${formatCount(result.position_count)} 条持仓` : "",
+        result.deal_count ? `${formatCount(result.deal_count)} 笔成交` : "",
+      ].filter(Boolean).join("、");
+      setNotice(parsed ? `已解析 ${parsed}` : "未识别到可导入记录");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "解析失败");
     } finally {
@@ -3086,7 +3093,7 @@ export function DataPage({ accounts, onImported, setNotice, requestConfirm, onRe
     setDownloadingTemplate(true);
     setNotice("正在下载 Excel 模板");
     try {
-      await api.downloadImportTemplate();
+      await api.downloadImportTemplate(activeDataTab === "deals" ? "deal" : "position");
       setNotice("Excel 模板已开始下载");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Excel 模板下载失败");
@@ -3277,24 +3284,16 @@ export function AccountFilterBar({ accounts, activeAccount, overview, showAccoun
   );
 }
 
-export function DataActions({ canImportApi, canImportLocal, importing, loading, downloadingTemplate, showAccountManagementLink, onOpenAccounts, onDownloadTemplate, onChooseImport, onRefreshApiData, label = "导入数据", importContext = "position" }: { canImportApi: boolean; canImportLocal: boolean; importing: boolean; loading: boolean; downloadingTemplate: boolean; showAccountManagementLink: boolean; onOpenAccounts?: () => void; onDownloadTemplate: () => Promise<void>; onChooseImport: (source: "file" | "excel", file: File | null) => Promise<void>; onRefreshApiData: () => Promise<void>; label?: string; importContext?: "position" | "deal" }) {
+export function DataActions({ canImportApi, canImportLocal, importing, loading, downloadingTemplate, showAccountManagementLink, onOpenAccounts, onDownloadTemplate, onChooseImport, onRefreshApiData, label = "导入数据", importContext = "position" }: { canImportApi: boolean; canImportLocal: boolean; importing: boolean; loading: boolean; downloadingTemplate: boolean; showAccountManagementLink: boolean; onOpenAccounts?: () => void; onDownloadTemplate: () => Promise<void>; onChooseImport: (file: File | null) => Promise<void>; onRefreshApiData: () => Promise<void>; label?: string; importContext?: "position" | "deal" }) {
   const disabled = importing || loading || downloadingTemplate;
   const contextLabel = importContext === "position" ? "持仓" : "成交";
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
   const droplist = (
     <Menu>
       {canImportApi ? <Menu.Item key="api" onClick={onRefreshApiData}>API 刷新{contextLabel}数据</Menu.Item> : null}
       {canImportLocal ? (
         <>
-          <Menu.Item key="excel">
-            <Upload showUploadList={false} accept=".xlsx,.xls" disabled={disabled} beforeUpload={(file) => { onChooseImport("excel", file as File); return false; }}>
-              <span>Excel 导入{contextLabel}数据</span>
-            </Upload>
-          </Menu.Item>
-          <Menu.Item key="file">
-            <Upload showUploadList={false} accept=".pdf,.png,.jpg,.jpeg" disabled={disabled} beforeUpload={(file) => { onChooseImport("file", file as File); return false; }}>
-              <span>文件导入{contextLabel}数据</span>
-            </Upload>
-          </Menu.Item>
+          <Menu.Item key="excel" onClick={() => excelInputRef.current?.click()}>Excel 导入{contextLabel}数据</Menu.Item>
           <Menu.Item key="template" onClick={onDownloadTemplate}>模板下载</Menu.Item>
         </>
       ) : null}
@@ -3302,9 +3301,12 @@ export function DataActions({ canImportApi, canImportLocal, importing, loading, 
     </Menu>
   );
   return (
-    <Dropdown droplist={droplist} trigger="click" disabled={disabled}>
-      <Button loading={importing || loading || downloadingTemplate}>{label}</Button>
-    </Dropdown>
+    <>
+      <input ref={excelInputRef} hidden type="file" accept=".xlsx" onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ""; void onChooseImport(file); }} />
+      <Dropdown droplist={droplist} trigger="click" disabled={disabled}>
+        <Button loading={importing || loading || downloadingTemplate}>{label}</Button>
+      </Dropdown>
+    </>
   );
 }
 
@@ -3368,7 +3370,7 @@ export function AccountOverviewHeader({ account, overview, showAccountManagement
   );
 }
 
-export function DataUpdatePanel({ canImportApi, canImportLocal, importing, loading, downloadingTemplate, showAccountManagementLink, onOpenAccounts, onDownloadTemplate, onChooseImport, onRefreshApiData, preview, onConfirmImport }: { canImportApi: boolean; canImportLocal: boolean; importing: boolean; loading: boolean; downloadingTemplate: boolean; showAccountManagementLink: boolean; onOpenAccounts?: () => void; onDownloadTemplate: () => Promise<void>; onChooseImport: (source: "file" | "excel", file: File | null) => Promise<void>; onRefreshApiData: () => Promise<void>; preview: ImportPreview | null; onConfirmImport: () => Promise<void> }) {
+export function DataUpdatePanel({ canImportApi, canImportLocal, importing, loading, downloadingTemplate, showAccountManagementLink, onOpenAccounts, onDownloadTemplate, onChooseImport, onRefreshApiData, preview, onConfirmImport }: { canImportApi: boolean; canImportLocal: boolean; importing: boolean; loading: boolean; downloadingTemplate: boolean; showAccountManagementLink: boolean; onOpenAccounts?: () => void; onDownloadTemplate: () => Promise<void>; onChooseImport: (file: File | null) => Promise<void>; onRefreshApiData: () => Promise<void>; preview: ImportPreview | null; onConfirmImport: () => Promise<void> }) {
   return (
     <section className="panel data-update-panel">
       <div className="toolbar data-update-toolbar">
@@ -3383,26 +3385,17 @@ export function DataUpdatePanel({ canImportApi, canImportLocal, importing, loadi
               <Button onClick={onDownloadTemplate} disabled={downloadingTemplate} loading={downloadingTemplate}>模板下载</Button>
               <Upload
                 showUploadList={false}
-                accept=".xlsx,.xls"
+                accept=".xlsx"
                 disabled={importing}
-                beforeUpload={(file) => { onChooseImport("excel", file as File); return false; }}
+                beforeUpload={(file) => { onChooseImport(file as File); return false; }}
               >
                 <Button disabled={importing} loading={importing}>Excel 导入</Button>
-              </Upload>
-              <Upload
-                showUploadList={false}
-                accept=".pdf,.png,.jpg,.jpeg"
-                disabled={importing}
-                beforeUpload={(file) => { onChooseImport("file", file as File); return false; }}
-              >
-                <Button disabled={importing} loading={importing}>文件导入</Button>
               </Upload>
             </>
           ) : null}
         </div>
       </div>
       {!canImportApi && !canImportLocal ? <small className="metadata-note">{showAccountManagementLink ? "该账户尚未配置数据导入方式，请到账户页编辑。" : "该账户尚未配置数据导入方式，请在上方账户列表编辑。"}</small> : null}
-      {canImportLocal ? <small className="metadata-note">图片和扫描 PDF 使用本地 OCR，识别结果可能有误。</small> : null}
       {preview ? <ImportPreviewPanel preview={preview} importing={importing} onConfirm={onConfirmImport} /> : null}
       {!canImportApi && !canImportLocal && showAccountManagementLink && onOpenAccounts ? <Button onClick={onOpenAccounts}>配置导入方式</Button> : null}
     </section>
@@ -3449,7 +3442,7 @@ export function DataDetailTabs({
   showAccountManagementLink: boolean;
   onOpenAccounts?: () => void;
   onDownloadTemplate: () => Promise<void>;
-  onChooseImport: (source: "file" | "excel", file: File | null) => Promise<void>;
+  onChooseImport: (file: File | null) => Promise<void>;
   onRefreshApiData: () => Promise<void>;
   onCheckApiConnection: (dataType: string, market?: string, provider?: string) => Promise<void>;
   onPullAccountData: (dataType: string) => Promise<void>;
@@ -3572,7 +3565,7 @@ export function DataDetailTabs({
   );
 }
 
-export function DataTableActions({ isPositionTab, canImportApi, canImportLocal, importing, loading, downloadingTemplate, showAccountManagementLink, onOpenAccounts, onDownloadTemplate, onChooseImport, onRefreshApiData, onAdd }: { isPositionTab: boolean; canImportApi: boolean; canImportLocal: boolean; importing: boolean; loading: boolean; downloadingTemplate: boolean; showAccountManagementLink: boolean; onOpenAccounts?: () => void; onDownloadTemplate: () => Promise<void>; onChooseImport: (source: "file" | "excel", file: File | null) => Promise<void>; onRefreshApiData: () => Promise<void>; onAdd: () => void }) {
+export function DataTableActions({ isPositionTab, canImportApi, canImportLocal, importing, loading, downloadingTemplate, showAccountManagementLink, onOpenAccounts, onDownloadTemplate, onChooseImport, onRefreshApiData, onAdd }: { isPositionTab: boolean; canImportApi: boolean; canImportLocal: boolean; importing: boolean; loading: boolean; downloadingTemplate: boolean; showAccountManagementLink: boolean; onOpenAccounts?: () => void; onDownloadTemplate: () => Promise<void>; onChooseImport: (file: File | null) => Promise<void>; onRefreshApiData: () => Promise<void>; onAdd: () => void }) {
   return (
     <div className="data-table-actions">
       <Button type="primary" onClick={onAdd}>新增数据</Button>
@@ -4349,13 +4342,35 @@ export function ImportPreviewPanel({ preview, importing, onConfirm }: { preview:
     normalized_market_value: 160,
     missing_market_code: 140,
   });
+  const dealPreviewTable = useResizableTableColumns({
+    deal_id: 160,
+    code: 140,
+    side: 100,
+    price: 120,
+    quantity: 120,
+    deal_time: 180,
+  });
+  const deals = preview.deals ?? [];
+  const isDealPreview = deals.length > 0 && preview.position_count === 0;
+  const buyCount = deals.filter((item) => item.side === "BUY").length;
+  const sellCount = deals.filter((item) => item.side === "SELL").length;
   return (
     <div className="import-preview inline-import-preview">
       <div className="summary-grid">
         <Metric label="来源" value={sourceLabel(preview.source_name)} />
-        <Metric label="持仓数" value={preview.position_count} />
-        <Metric label="总资产" value={formatMoney(preview.total_assets)} />
-        <Metric label="持仓市值" value={formatMoney(preview.market_value)} />
+        {isDealPreview ? (
+          <>
+            <Metric label="成交数" value={preview.deal_count} />
+            <Metric label="买入" value={buyCount} />
+            <Metric label="卖出" value={sellCount} />
+          </>
+        ) : (
+          <>
+            <Metric label="持仓数" value={preview.position_count} />
+            <Metric label="总资产" value={formatMoney(preview.total_assets)} />
+            <Metric label="持仓市值" value={formatMoney(preview.market_value)} />
+          </>
+        )}
       </div>
       {preview.errors?.length ? <Checklist title="导入错误" items={preview.errors} emptyText="无" /> : null}
       {preview.warnings?.length ? <Checklist title="导入提示" items={preview.warnings} emptyText="无" /> : null}
@@ -4399,7 +4414,29 @@ export function ImportPreviewPanel({ preview, importing, onConfirm }: { preview:
           ]}
         />
       ) : null}
-      <Button onClick={onConfirm} disabled={importing || !!preview.errors?.length} loading={importing}>确认导入</Button>
+      {deals.length ? (
+        <Table
+          className="arco-data-table pro-table import-preview-table"
+          rowKey={(item: AccountDeal) => `${item.account_id}-${item.deal_id}`}
+          data={deals.slice(0, 8)}
+          size="middle"
+          hover
+          tableLayoutFixed
+          components={dealPreviewTable.components}
+          border={{ wrapper: true, headerCell: false, bodyCell: false }}
+          pagination={false}
+          scroll={{ x: dealPreviewTable.totalTableWidth }}
+          columns={[
+            { title: "成交号", dataIndex: "deal_id", ...dealPreviewTable.columnProps("deal_id") },
+            { title: "代码", dataIndex: "code", ...dealPreviewTable.columnProps("code") },
+            { title: "方向", dataIndex: "side", ...dealPreviewTable.columnProps("side"), render: (value: string) => value === "SELL" ? "卖出" : "买入" },
+            { title: "价格", dataIndex: "price", ...dealPreviewTable.columnProps("price"), render: (value: number) => formatPrice(value) },
+            { title: "数量", dataIndex: "quantity", ...dealPreviewTable.columnProps("quantity"), render: (value: number) => formatPrice(value) },
+            { title: "成交时间", dataIndex: "deal_time", ...dealPreviewTable.columnProps("deal_time"), render: (value?: string | null) => value ? formatDate(value) : "导入时间" },
+          ]}
+        />
+      ) : null}
+      <Button type="primary" onClick={onConfirm} disabled={importing || !preview.can_confirm || !!preview.errors?.length} loading={importing}>确认导入</Button>
     </div>
   );
 }
@@ -5363,7 +5400,7 @@ export function parseBackendDate(value: string) {
 export function noticeClass(notice: string, working = false) {
   if (working || notice.includes("正在")) return "working";
   if (notice.includes("成功") || notice.includes("已生成") || notice.includes("已完成")) return "success";
-  if (notice.includes("失败") || notice.includes("错误") || notice.includes("不可用")) return "error";
+  if (notice.includes("失败") || notice.includes("错误") || notice.includes("不可用") || notice.includes("未启用") || notice.includes("未导入")) return "error";
   return "";
 }
 
