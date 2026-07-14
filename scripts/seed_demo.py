@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.database import Base, engine  # noqa: E402
+from app.demo_data import DEMO_DATA_VERSION  # noqa: E402
 from app.models import (  # noqa: E402
     AIWorkflowRun,
     Account,
@@ -54,7 +55,7 @@ def main() -> int:
     Base.metadata.create_all(bind=engine)
 
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    sync_id = "demo_sync_001"
+    sync_id = DEMO_DATA_VERSION
     with Session(engine) as db:
         _seed_accounts(db, now, sync_id)
         _seed_positions(db, now, sync_id)

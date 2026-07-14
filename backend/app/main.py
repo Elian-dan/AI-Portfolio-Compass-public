@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.adapters.futu_adapter import FutuReadOnlyAdapter
 from app.config import get_settings
 from app.database import engine, get_db, init_db
+from app.demo_data import ensure_demo_data
 from app.models import AIAnalysis, Account, AccountSnapshot, AIWorkflowRun, Alert, DataSourceState, Deal, DecisionCard, KlineSnapshot, NewsItem, PositionLayerOverride, PositionSnapshot, QuoteSummary, TradeReview, UserAction
 from app.schemas import DealSaveRequest, DeleteLocalDataRequest, LayerOverrideRequest, PositionSnapshotSaveRequest
 from app.services.sync import (
@@ -90,6 +91,8 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    if ensure_demo_data():
+        init_db()
 
 
 @app.get("/api/health")
