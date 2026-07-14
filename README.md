@@ -1,7 +1,7 @@
 # AI Portfolio Compass
 
-> AI 持仓罗盘：一个把多个证券账户放到同一张地图里的本地投资组合工作台
->
+> AI 持仓罗盘：一个把多个证券账户放到同一张地图里的投资组合工作台
+> AI Portfolio Compass — AI portfolio copilot for investors with multiple brokerage accounts.
 > 中文 | [English](#english)
 
 AI Portfolio Compass 的起点很朴素：很多个人投资者并不只有一个账户。A 股基金、A 股股票、美股、港股、券商账户、手动导入资产，常常散落在不同 App 和不同市场里。你可能知道每个账户里有什么，却很难一眼看清“我到底完整持有什么、集中风险在哪里、哪些仓位真的需要处理”。
