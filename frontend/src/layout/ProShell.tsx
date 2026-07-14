@@ -10,7 +10,7 @@ import {
   IconStorage,
   IconSun,
 } from "@arco-design/web-react/icon";
-import type { AccountSummary } from "../api";
+import type { AccountSummary, WorkspaceMode } from "../api";
 
 const { Header, Sider, Content } = Layout;
 
@@ -49,6 +49,9 @@ type ProShellProps = {
   onNavigate: (page: string) => void;
   onBack: () => void;
   onAccountChange: (accountId: string) => void;
+  workspace: WorkspaceMode;
+  switchingWorkspace?: boolean;
+  onToggleWorkspace: () => void;
 };
 
 export function ProShell({
@@ -66,7 +69,11 @@ export function ProShell({
   onNavigate,
   onBack,
   onAccountChange,
+  workspace,
+  switchingWorkspace = false,
+  onToggleWorkspace,
 }: ProShellProps) {
+  const demoMode = workspace === "demo";
   const crumbs = active === "标的详情"
     ? [{ label: "工作台", target: "首页" }, { label: detailReturnTarget, target: detailReturnTarget }, { label: active }]
     : [{ label: "工作台", target: "首页" }, { label: active }];
@@ -104,17 +111,17 @@ export function ProShell({
             </Breadcrumb>
           </div>
           <Space size={12} className="pro-header-actions">
-            {headerExtra}
-            <Tooltip content={theme === "dark" ? "切换浅色模式" : "切换深色模式"}>
+            <Tooltip content={demoMode ? "切换到你的正式数据" : "进入隔离的演示工作区"}>
               <Button
-                className="pro-theme-toggle"
-                type="secondary"
-                shape="circle"
-                icon={theme === "dark" ? <IconSun /> : <IconMoon />}
-                aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
-                onClick={onToggleTheme}
-              />
+                className={`workspace-mode-toggle ${demoMode ? "is-demo" : "is-formal"}`}
+                loading={switchingWorkspace}
+                aria-label={demoMode ? "当前为演示模式，点击切换到正式模式" : "当前为正式模式，点击切换到演示模式"}
+                onClick={onToggleWorkspace}
+              >
+                {demoMode ? "演示模式" : "正式模式"}
+              </Button>
             </Tooltip>
+            {headerExtra}
             {showAccountSwitcher ? (
               <Select
                 className="pro-account-select"
@@ -131,8 +138,19 @@ export function ProShell({
               </Select>
             ) : null}
             {active === "标的详情" ? <Button onClick={onBack}>返回{detailReturnTarget}</Button> : null}
+            <Tooltip content={theme === "dark" ? "切换浅色模式" : "切换深色模式"}>
+              <Button
+                className="pro-theme-toggle"
+                type="secondary"
+                shape="circle"
+                icon={theme === "dark" ? <IconSun /> : <IconMoon />}
+                aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
+                onClick={onToggleTheme}
+              />
+            </Tooltip>
           </Space>
         </Header>
+        {demoMode ? <div className="demo-mode-banner">演示模式 · 当前使用的是隔离的虚构数据，不会写入正式知识库</div> : null}
         <Content className="pro-content">
           {children}
         </Content>

@@ -16,9 +16,11 @@
 - `calculate_portfolio_metrics`：第一大合并标的、Top5 权重、权重口径。
 - `calculate_allocation_distribution`：资产、货币、主题分布、收益贡献、图表 artifact。
 
+所有报告输入必须来自已落库快照。不得在报告生成过程中访问 OpenD、行情 API 或其他外部数据源；未同步的行情、K线或新闻必须按缺失数据处理。
+
 ## 可选输入
 - `get_latest_quotes`：当前价、涨跌幅；用于行情判断。
-- `get_kline_summary`：近月/近季/近年趋势摘要；用于 K线判断。
+- `get_kline_summary`：已同步日线/周线快照的趋势摘要；用于 K线判断。
 - `get_recent_news`：近期公开资讯摘要；用于事件风险。
 - `get_deals_summary`：近期交易行为和资金流动。
 
@@ -155,7 +157,7 @@
 - 技术判断强度：强 / 中 / 弱，依据数据完整度。
 
 缺失时写：
-“未取得 K线，技术判断降级；本报告不对短期趋势作判断。”
+“未同步 K线，技术分析已降级；本报告不对短期趋势作判断。”
 
 ### 六、事件与新闻风险
 前提：必须调用 `get_recent_news`。

@@ -21,6 +21,8 @@ export type HealthStatus = {
     deals: number;
     empty: boolean;
   };
+  demo_mode?: boolean;
+  workspace?: "formal" | "demo";
   futu?: {
     host: string;
     port: number;
@@ -515,19 +517,32 @@ export type FreshnessItem = {
   stale_action: string;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+export type WorkspaceMode = "formal" | "demo";
+
+const WORKSPACE_STORAGE_KEY = "portfolio_workspace";
+const FORMAL_API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8010";
+const DEMO_API_BASE = import.meta.env.VITE_DEMO_API_BASE ?? "http://127.0.0.1:8011";
+
+function currentWorkspace(): WorkspaceMode {
+  return localStorage.getItem(WORKSPACE_STORAGE_KEY) === "demo" ? "demo" : "formal";
+}
+
+function apiBase() {
+  return currentWorkspace() === "demo" ? DEMO_API_BASE : FORMAL_API_BASE;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
+  const base = apiBase();
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${base}${path}`, {
       headers: { ...(isFormData ? {} : { "Content-Type": "application/json" }), ...(options?.headers ?? {}) },
       ...options,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "网络请求失败";
-    throw new Error(`无法连接本地后端（${API_BASE}）：${message}`);
+    throw new Error(`无法连接${currentWorkspace() === "demo" ? "演示" : "正式"}工作区：${message}`);
   }
   if (!response.ok) {
     const text = await response.text();
@@ -537,12 +552,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 async function downloadFile(path: string, fallbackFilename: string) {
+  const base = apiBase();
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`);
+    response = await fetch(`${base}${path}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "网络请求失败";
-    throw new Error(`无法连接本地后端（${API_BASE}）：${message}`);
+    throw new Error(`无法连接${currentWorkspace() === "demo" ? "演示" : "正式"}工作区：${message}`);
   }
   if (!response.ok) {
     const text = await response.text();
@@ -582,6 +598,8 @@ function filenameFromDisposition(disposition: string | null) {
 }
 
 export const api = {
+  workspace: currentWorkspace,
+  setWorkspace: (workspace: WorkspaceMode) => localStorage.setItem(WORKSPACE_STORAGE_KEY, workspace),
   health: () => request<HealthStatus>("/api/health"),
   aiProviders: () => request<{ items: AIProviderTemplate[] }>("/api/ai/providers"),
   aiConfig: () => request<AIConfigResponse>("/api/ai/config"),
@@ -641,8 +659,8 @@ export const api = {
     request<{ status: string }>(`/api/profile/ai-workflows/${encodeURIComponent(runId)}/delete`, {
       method: "POST",
     }),
-  profileWorkflowDownloadUrl: (runId: string) => `${API_BASE}/api/profile/ai-workflows/${encodeURIComponent(runId)}/download`,
-  profileWorkflowStreamUrl: (runId: string) => `${API_BASE}/api/profile/ai-workflows/${encodeURIComponent(runId)}/stream`,
+  profileWorkflowDownloadUrl: (runId: string) => `${apiBase()}/api/profile/ai-workflows/${encodeURIComponent(runId)}/download`,
+  profileWorkflowStreamUrl: (runId: string) => `${apiBase()}/api/profile/ai-workflows/${encodeURIComponent(runId)}/stream`,
   accountDataOverview: (accountId: string) => request<AccountDataOverview>(`/api/data/accounts/${encodeURIComponent(accountId)}/overview`),
   checkAccountProvider: (accountId: string, payload: { data_type: string; market?: string; provider?: string }) =>
     request<{ provider_states: ProviderState[]; status: string; message: string }>(`/api/data/accounts/${encodeURIComponent(accountId)}/providers/check`, {

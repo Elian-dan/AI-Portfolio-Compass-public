@@ -18,6 +18,7 @@ from app.models import (
     DataSourceState,
     Deal,
     DecisionCard,
+    KlineSnapshot,
     NewsItem,
     PositionLayerOverride,
     PositionSnapshot,
@@ -95,9 +96,22 @@ def pull_account_market_data(db: Session, account: Account, data_type: str) -> d
     if normalized_type == "quote":
         rows = adapter.fetch_quote_summaries([item.code for item in positions])
         inserted = _persist_quote_rows(db, sync_id, rows)
+        all_position_codes = sorted({item.code for item in latest_positions(db, "all") if item.code and not item.missing_market_code})
+        kline_rows, kline_errors = adapter.fetch_kline_snapshot_rows(all_position_codes)
+        kline_inserted = _persist_kline_rows(db, sync_id, kline_rows)
         _mark_account_pull_states(db, account, positions, "quote", rows, "")
         db.commit()
-        return {"status": "success", "message": f"已拉取 {inserted} 条行情数据", "inserted_count": inserted, "updated_count": 0}
+        kline_message = f"，并为全部账户 {len(all_position_codes)} 个持仓标的保存 {kline_inserted} 条日线/周线快照"
+        if kline_errors:
+            kline_message += f"（{len(kline_errors)} 个周期未返回）"
+        return {
+            "status": "success",
+            "message": f"已拉取 {inserted} 条行情数据{kline_message}",
+            "inserted_count": inserted + kline_inserted,
+            "updated_count": 0,
+            "kline_snapshot_count": kline_inserted,
+            "kline_errors": kline_errors,
+        }
 
     position_payloads = [
         {
@@ -121,6 +135,33 @@ def _persist_quote_rows(db: Session, sync_id: str, rows: list[dict]) -> int:
     inserted = 0
     for payload in rows:
         db.add(QuoteSummary(sync_id=sync_id, **payload))
+        inserted += 1
+    return inserted
+
+
+def _persist_kline_rows(db: Session, sync_id: str, rows: list[dict]) -> int:
+    snapshot_time = datetime.now(timezone.utc)
+    inserted = 0
+    for payload in rows:
+        time_key = str(payload.get("time_key") or "")
+        if not time_key or float(payload.get("close") or 0) <= 0:
+            continue
+        db.add(
+            KlineSnapshot(
+                code=str(payload["code"]),
+                provider="futu",
+                period=str(payload["period"]),
+                time_key=time_key,
+                open=float(payload.get("open") or 0),
+                close=float(payload.get("close") or 0),
+                high=float(payload.get("high") or 0),
+                low=float(payload.get("low") or 0),
+                volume=float(payload.get("volume") or 0),
+                turnover=float(payload.get("turnover") or 0),
+                snapshot_time=snapshot_time,
+                sync_id=sync_id,
+            )
+        )
         inserted += 1
     return inserted
 

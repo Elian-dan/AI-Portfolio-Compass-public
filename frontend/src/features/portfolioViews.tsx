@@ -1114,7 +1114,7 @@ export function ReviewPage({ review, tradeReviews, selectedAccount, accounts, re
   const [draftNote, setDraftNote] = useState("");
   const [draftTags, setDraftTags] = useState<TradeIntentTags>(emptyIntentTags);
   const [draftPlan, setDraftPlan] = useState<TradeIntentPlan>(emptyIntentPlan);
-  const [reviewFilter, setReviewFilter] = useState("待处理");
+  const [reviewFilter, setReviewFilter] = useState("全部");
   const [reviewSearch, setReviewSearch] = useState("");
   const [resultFilter, setResultFilter] = useState("全部结果");
   const [intentFilter, setIntentFilter] = useState("全部意图");
@@ -1755,35 +1755,35 @@ export function PreferenceEditorModal({ preference, onSave, onClose }: { prefere
       <Tabs defaultActiveTab="basic">
         <Tabs.TabPane key="basic" title="基础与财务">
           <div className="kyc-questionnaire">
-          <label className="field-label">年龄区间<SelectInput value={kycValue("age_range")} options={["未填写", "18-29", "30-39", "40-49", "50-59", "60以上"]} onChange={(value) => setKyc("age_range", value)} /></label>
-          <label className="field-label">就业状态<SelectInput value={kycValue("employment_status")} options={["未填写", "受雇", "自雇", "企业主", "自由职业", "退休", "学生", "其他"]} onChange={(value) => setKyc("employment_status", value)} /></label>
-          <label className="field-label">详细职业与行业<input value={kycValue("occupation_industry")} onChange={(event) => setKyc("occupation_industry", event.target.value)} placeholder="例如：软件工程师 / 互联网" /></label>
-          <label className="field-label">年收入范围<SelectInput value={kycValue("annual_income")} options={["未填写", "低于20万", "20万-50万", "50万-100万", "100万-300万", "300万以上"]} onChange={(value) => setKyc("annual_income", value)} /></label>
-          <label className="field-label">收入稳定性<SelectInput value={kycValue("income_stability")} options={["未填写", "稳定工资", "奖金/佣金波动", "经营性收入", "投资收入为主", "暂不稳定"]} onChange={(value) => setKyc("income_stability", value)} /></label>
-          <label className="field-label">净资产范围<SelectInput value={kycValue("net_worth")} options={["未填写", "低于50万", "50万-200万", "200万-500万", "500万-1000万", "1000万以上"]} onChange={(value) => setKyc("net_worth", value)} /></label>
-          <label className="field-label">可投资/流动资产<SelectInput value={kycValue("liquid_assets")} options={["未填写", "低于20万", "20万-50万", "50万-200万", "200万-500万", "500万以上"]} onChange={(value) => setKyc("liquid_assets", value)} /></label>
-          <label className="field-label">负债与杠杆情况<SelectInput value={kycValue("liabilities")} options={["未填写", "无负债", "房贷为主", "消费贷/信用贷", "经营贷", "保证金/融资负债"]} onChange={(value) => setKyc("liabilities", value)} /></label>
-          <label className="field-label">月度现金流状况<SelectInput value={kycValue("monthly_cash_flow")} options={["未填写", "稳定结余", "基本收支平衡", "阶段性大额支出", "现金流波动较大", "需要投资账户补流动性"]} onChange={(value) => setKyc("monthly_cash_flow", value)} /></label>
-          <label className="field-label">投资资金来源<SelectInput value={kycValue("source_of_funds")} options={["未填写", "工资/奖金", "经营收入", "资产出售", "投资收益", "继承/赠与", "其他合法来源"]} onChange={(value) => setKyc("source_of_funds", value)} /></label>
-          <label className="field-label">财富来源<SelectInput value={kycValue("source_of_wealth")} options={["未填写", "劳动收入积累", "创业/经营积累", "房产/资产增值", "长期投资积累", "家庭赠与/继承", "其他"]} onChange={(value) => setKyc("source_of_wealth", value)} /></label>
-          <label className="field-label">税务身份/居民地<input value={kycValue("tax_residency")} onChange={(event) => setKyc("tax_residency", event.target.value)} placeholder="例如：中国税收居民，常驻上海" /></label>
-          <label className="field-label">其他投资/持仓<input value={kycValue("other_investments")} onChange={(event) => setKyc("other_investments", event.target.value)} placeholder="例如：房产、基金、理财、保险" /></label>
+          <div className="field-label">年龄区间<SelectInput value={kycValue("age_range")} options={["未填写", "18-29", "30-39", "40-49", "50-59", "60以上"]} onChange={(value) => setKyc("age_range", value)} /></div>
+          <div className="field-label">就业状态<SelectInput value={kycValue("employment_status")} options={["未填写", "受雇", "自雇", "企业主", "自由职业", "退休", "学生", "其他"]} onChange={(value) => setKyc("employment_status", value)} /></div>
+          <div className="field-label">详细职业与行业<input value={kycValue("occupation_industry")} onChange={(event) => setKyc("occupation_industry", event.target.value)} placeholder="例如：软件工程师 / 互联网" /></div>
+          <div className="field-label">年收入范围<SelectInput value={kycValue("annual_income")} options={["未填写", "低于20万", "20万-50万", "50万-100万", "100万-300万", "300万以上"]} onChange={(value) => setKyc("annual_income", value)} /></div>
+          <div className="field-label">收入稳定性<SelectInput value={kycValue("income_stability")} options={["未填写", "稳定工资", "奖金/佣金波动", "经营性收入", "投资收入为主", "暂不稳定"]} onChange={(value) => setKyc("income_stability", value)} /></div>
+          <div className="field-label">净资产范围<SelectInput value={kycValue("net_worth")} options={["未填写", "低于50万", "50万-200万", "200万-500万", "500万-1000万", "1000万以上"]} onChange={(value) => setKyc("net_worth", value)} /></div>
+          <div className="field-label">可投资/流动资产<SelectInput value={kycValue("liquid_assets")} options={["未填写", "低于20万", "20万-50万", "50万-200万", "200万-500万", "500万以上"]} onChange={(value) => setKyc("liquid_assets", value)} /></div>
+          <div className="field-label">负债与杠杆情况<SelectInput value={kycValue("liabilities")} options={["未填写", "无负债", "房贷为主", "消费贷/信用贷", "经营贷", "保证金/融资负债"]} onChange={(value) => setKyc("liabilities", value)} /></div>
+          <div className="field-label">月度现金流状况<SelectInput value={kycValue("monthly_cash_flow")} options={["未填写", "稳定结余", "基本收支平衡", "阶段性大额支出", "现金流波动较大", "需要投资账户补流动性"]} onChange={(value) => setKyc("monthly_cash_flow", value)} /></div>
+          <div className="field-label">投资资金来源<SelectInput value={kycValue("source_of_funds")} options={["未填写", "工资/奖金", "经营收入", "资产出售", "投资收益", "继承/赠与", "其他合法来源"]} onChange={(value) => setKyc("source_of_funds", value)} /></div>
+          <div className="field-label">财富来源<SelectInput value={kycValue("source_of_wealth")} options={["未填写", "劳动收入积累", "创业/经营积累", "房产/资产增值", "长期投资积累", "家庭赠与/继承", "其他"]} onChange={(value) => setKyc("source_of_wealth", value)} /></div>
+          <div className="field-label">税务身份/居民地<input value={kycValue("tax_residency")} onChange={(event) => setKyc("tax_residency", event.target.value)} placeholder="例如：中国税收居民，常驻上海" /></div>
+          <div className="field-label">其他投资/持仓<input value={kycValue("other_investments")} onChange={(event) => setKyc("other_investments", event.target.value)} placeholder="例如：房产、基金、理财、保险" /></div>
           </div>
         </Tabs.TabPane>
         <Tabs.TabPane key="investment" title="投资偏好">
           <div className="kyc-questionnaire">
-          <label className="field-label">投资目标<SelectInput value={kycValue("investment_objective")} options={["未填写", "资本保值", "稳定收入", "长期增值", "积极增长", "短线交易"]} onChange={(value) => setKyc("investment_objective", value)} /></label>
-          <label className="field-label">投资经验<SelectInput value={kycValue("investment_experience")} options={["未填写", "少于1年", "1-3年", "3-5年", "5年以上", "专业投资经验"]} onChange={(value) => setKyc("investment_experience", value)} /></label>
-          <label className="field-label">熟悉产品<SelectInput value={kycValue("product_knowledge")} options={["未填写", "仅股票/ETF", "股票+基金", "股票+期权", "股票+债券+基金", "复杂衍生品"]} onChange={(value) => setKyc("product_knowledge", value)} /></label>
-          <label className="field-label">产品知识确认<SelectInput value={kycValue("knowledge_confirmation")} options={["未填写", "了解基础风险", "了解波动与亏损风险", "了解期权/杠杆风险", "需要进一步学习"]} onChange={(value) => setKyc("knowledge_confirmation", value)} /></label>
-          <label className="field-label">可承受最大回撤<SelectInput value={kycValue("loss_tolerance")} options={["未填写", "5%以内", "5%-10%", "10%-20%", "20%-35%", "35%以上"]} onChange={(value) => setKyc("loss_tolerance", value)} /></label>
-          <label className="field-label">风险承受能力<SelectInput value={draft.risk_tolerance} options={["未填写", "保守", "稳健", "积极", "激进"]} onChange={(value) => setDraft({ ...draft, risk_tolerance: value })} /></label>
-          <label className="field-label">投资期限<SelectInput value={draft.investment_horizon} options={["未填写", "3个月以内", "3-12个月", "1-3年", "3年以上"]} onChange={(value) => setDraft({ ...draft, investment_horizon: value })} /></label>
-          <label className="field-label">流动性需求<input value={draft.liquidity_needs} onChange={(event) => setDraft({ ...draft, liquidity_needs: event.target.value })} placeholder="例如：保留 6 个月生活费" /></label>
-          <label className="field-label">重大资金用途<input value={kycValue("major_expense_plan")} onChange={(event) => setKyc("major_expense_plan", event.target.value)} placeholder="例如：一年内购房/教育/创业支出" /></label>
-          <label className="field-label">目标收益<input value={draft.target_return} onChange={(event) => setDraft({ ...draft, target_return: event.target.value })} placeholder="例如：年化 8%-12%" /></label>
-          <label className="field-label">投资限制/禁忌<input value={kycValue("investment_restrictions")} onChange={(event) => setKyc("investment_restrictions", event.target.value)} placeholder="例如：不使用融资、不碰单腿期权" /></label>
-          <label className="field-label wide">备注<textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder="例如：未来一年可能有大额支出、不希望使用杠杆等" /></label>
+          <div className="field-label">投资目标<SelectInput value={kycValue("investment_objective")} options={["未填写", "资本保值", "稳定收入", "长期增值", "积极增长", "短线交易"]} onChange={(value) => setKyc("investment_objective", value)} /></div>
+          <div className="field-label">投资经验<SelectInput value={kycValue("investment_experience")} options={["未填写", "少于1年", "1-3年", "3-5年", "5年以上", "专业投资经验"]} onChange={(value) => setKyc("investment_experience", value)} /></div>
+          <div className="field-label">熟悉产品<SelectInput value={kycValue("product_knowledge")} options={["未填写", "仅股票/ETF", "股票+基金", "股票+期权", "股票+债券+基金", "复杂衍生品"]} onChange={(value) => setKyc("product_knowledge", value)} /></div>
+          <div className="field-label">产品知识确认<SelectInput value={kycValue("knowledge_confirmation")} options={["未填写", "了解基础风险", "了解波动与亏损风险", "了解期权/杠杆风险", "需要进一步学习"]} onChange={(value) => setKyc("knowledge_confirmation", value)} /></div>
+          <div className="field-label">可承受最大回撤<SelectInput value={kycValue("loss_tolerance")} options={["未填写", "5%以内", "5%-10%", "10%-20%", "20%-35%", "35%以上"]} onChange={(value) => setKyc("loss_tolerance", value)} /></div>
+          <div className="field-label">风险承受能力<SelectInput value={draft.risk_tolerance} options={["未填写", "保守", "稳健", "积极", "激进"]} onChange={(value) => setDraft({ ...draft, risk_tolerance: value })} /></div>
+          <div className="field-label">投资期限<SelectInput value={draft.investment_horizon} options={["未填写", "3个月以内", "3-12个月", "1-3年", "3年以上"]} onChange={(value) => setDraft({ ...draft, investment_horizon: value })} /></div>
+          <div className="field-label">流动性需求<input value={draft.liquidity_needs} onChange={(event) => setDraft({ ...draft, liquidity_needs: event.target.value })} placeholder="例如：保留 6 个月生活费" /></div>
+          <div className="field-label">重大资金用途<input value={kycValue("major_expense_plan")} onChange={(event) => setKyc("major_expense_plan", event.target.value)} placeholder="例如：一年内购房/教育/创业支出" /></div>
+          <div className="field-label">目标收益<input value={draft.target_return} onChange={(event) => setDraft({ ...draft, target_return: event.target.value })} placeholder="例如：年化 8%-12%" /></div>
+          <div className="field-label">投资限制/禁忌<input value={kycValue("investment_restrictions")} onChange={(event) => setKyc("investment_restrictions", event.target.value)} placeholder="例如：不使用融资、不碰单腿期权" /></div>
+          <div className="field-label wide">备注<textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder="例如：未来一年可能有大额支出、不希望使用杠杆等" /></div>
           </div>
         </Tabs.TabPane>
       </Tabs>
@@ -1921,7 +1921,7 @@ export function WorkflowWindow({ run, text, artifacts, statusText, onClose, onRe
 export function WorkflowPanel({ run, text, artifacts, statusText, onRetry }: { run: AIWorkflowRun; text: string; artifacts: WorkflowArtifact[]; statusText: string; onClose?: () => void; onRetry?: () => void; onCancel?: () => void; onOpen?: () => void }) {
   const displaySteps = stepsForDisplay(run);
   const phase = getWorkflowPhase(run, displaySteps, artifacts, text);
-  const progress = getWorkflowProgress(phase, displaySteps, artifacts, text);
+  const progress = getWorkflowProgress(phase, displaySteps, artifacts, text, run.workflow_type);
   const expectation = getWorkflowExpectation(phase, run, progress, statusText);
   const qualityIssues = getWorkflowQualityIssues(run);
   const isTerminalProblem = phase === "failed" || phase === "cancelled";
@@ -2086,15 +2086,17 @@ export function getWorkflowPhase(run: AIWorkflowRun, steps: WorkflowStep[], arti
   return "prepare";
 }
 
-export function getWorkflowProgress(phase: WorkflowPhase, steps: WorkflowStep[], artifacts: WorkflowArtifact[], text: string): number {
+export function getWorkflowProgress(phase: WorkflowPhase, steps: WorkflowStep[], artifacts: WorkflowArtifact[], text: string, workflowType: AIWorkflowRun["workflow_type"]): number {
   if (phase === "completed") return 100;
   if (phase === "failed" || phase === "cancelled") return 0;
   const completedStepCount = steps.filter((step) => step.status === "completed").length;
-  const stepProgress = steps.length ? Math.min(22, Math.round((completedStepCount / steps.length) * 22)) : 0;
-  if (phase === "prepare") return Math.max(8, stepProgress);
-  if (phase === "analyze") return Math.max(28, 28 + stepProgress);
-  if (phase === "chart") return Math.min(72, 52 + artifacts.length * 5);
-  if (phase === "write") return Math.min(90, 74 + Math.floor(text.trim().length / 220));
+  const stepProgress = Math.min(22, Math.round((completedStepCount / Math.max(steps.length, 10)) * 22));
+  const expectedChapterCount = workflowSkeletonSections[workflowType]?.length || 6;
+  const completedChapterCount = steps.filter((step) => step.tool_name?.startsWith("generate_chapter_") && step.status === "completed").length;
+  if (phase === "prepare") return Math.max(6, stepProgress);
+  if (phase === "analyze") return Math.max(14, 14 + stepProgress);
+  if (phase === "chart") return Math.min(56, 40 + artifacts.length * 4);
+  if (phase === "write") return Math.min(90, 60 + Math.round((completedChapterCount / expectedChapterCount) * 30));
   if (phase === "validate") return 94;
   return 8;
 }
@@ -2145,6 +2147,8 @@ export function getWorkflowExpectation(phase: WorkflowPhase, run: AIWorkflowRun,
 }
 
 export function WorkflowProgressHeader({ phase, progress, expectation }: { phase: WorkflowPhase; progress: number; expectation: WorkflowExpectation }) {
+  const phaseIndex = workflowPhaseItems.findIndex((item) => item.key === phase);
+  const phaseLabel = phaseIndex >= 0 ? `第 ${phaseIndex + 1}/${workflowPhaseItems.length} 阶段` : "生成状态";
   return (
     <div className={`workflow-progress-card ${phase}`}>
       <div className="workflow-progress-copy">
@@ -2154,9 +2158,9 @@ export function WorkflowProgressHeader({ phase, progress, expectation }: { phase
         <small>{expectation.next}</small>
       </div>
       <div className="workflow-progress-side">
-        <strong>{progress}%</strong>
+        <strong>{phase === "completed" ? "已完成" : phaseLabel}</strong>
         <div className="workflow-progress-track"><i style={{ width: `${progress}%` }} /></div>
-        <small>{expectation.timeHint}</small>
+        <small>{phase === "completed" ? expectation.timeHint : `${expectation.timeHint} · 阶段进度`}</small>
       </div>
       <div className="workflow-close-hint">{expectation.closeHint}</div>
     </div>
@@ -2247,7 +2251,7 @@ export function WorkflowExecutionDetails({ steps }: { steps: WorkflowStep[] }) {
   return (
     <div className="workflow-details">
       <Button className="workflow-details-toggle" onClick={() => setOpen((value) => !value)}>
-        {open ? "收起生成过程" : "查看生成过程"}
+        {open ? "收起执行明细" : "查看执行明细"}
         <small>{runningStep ? getStepUserHint(runningStep) : `${steps.filter((step) => step.status === "completed").length}/${steps.length || 0} 步已完成`}</small>
       </Button>
       {open ? (
@@ -2258,7 +2262,7 @@ export function WorkflowExecutionDetails({ steps }: { steps: WorkflowStep[] }) {
                 {step.status === "completed" ? "已完成" : step.status === "running" ? <><Spinner />运行中</> : step.status === "failed" ? "失败" : "等待"}
               </span>
               <div>
-                <strong>{step.action_type === "agent_thought" ? "Agent思考" : `步骤${step.step_no}`}：{formatWorkflowStatusText(step.title)}</strong>
+                <strong>{getWorkflowStepLabel(step)}</strong>
                 <p>{step.status === "running" ? getStepUserHint(step) : step.detail}</p>
                 {step.agent_note ? <small className="agent-note">Agent：{step.agent_note}</small> : null}
                 {step.expected_observation ? <small>期望：{step.expected_observation}</small> : null}
@@ -2271,6 +2275,22 @@ export function WorkflowExecutionDetails({ steps }: { steps: WorkflowStep[] }) {
       ) : null}
     </div>
   );
+}
+
+export function getWorkflowStepLabel(step: WorkflowStep): string {
+  if (step.action_type === "agent_thought") return "正在判断下一步";
+  const chapterMatch = (step.tool_name || step.action_label || "").match(/generate_chapter_(\d+)/);
+  if (chapterMatch) return `撰写第 ${chapterMatch[1]} 章`;
+  const source = `${step.title} ${step.detail} ${step.tool_name ?? ""} ${step.action_label}`;
+  if (/read_skill_doc|技能|框架/.test(source)) return "确认分析框架";
+  if (/portfolio|账户|持仓|context|exposure/.test(source)) return "读取组合数据";
+  if (/quote|行情|K线|kline/.test(source)) return "补充行情数据";
+  if (/audit_calculation_pack|AI 审计|审计/.test(source)) return "复核计算结果";
+  if (/calculate_audit_pack|整理计算包|audit pack/.test(source)) return "整理报告数据";
+  if (/calculate|metrics|allocation|distribution/.test(source)) return "计算核心指标";
+  if (/图表|chart/.test(source)) return "生成报告图表";
+  if (/finalize|report|报告/.test(source)) return "开始撰写报告";
+  return formatWorkflowStatusText(step.title);
 }
 
 export function WorkflowSkeletonReport({ workflowType }: { workflowType: AIWorkflowRun["workflow_type"] }) {
@@ -4653,6 +4673,7 @@ export function Spinner() {
 export function Metric({ label, value, action }: { label: string; value: string | number; action?: ReactNode }) {
   const displayValue = typeof value === "number" ? formatCount(value) : value;
   const moneyMatch = typeof displayValue === "string" ? displayValue.match(/^(.+?)\s*([A-Z]{3,4})$/) : null;
+  const moneyDigits = moneyMatch ? moneyMatch[1].replace(/[^\d.-]/g, "").length : 0;
   const isLongValue = typeof displayValue === "string" && displayValue.length > 15;
   return (
     <div className={`metric ${action ? "with-action" : ""} ${isLongValue ? "metric-long" : ""}`}>
@@ -4663,7 +4684,7 @@ export function Metric({ label, value, action }: { label: string; value: string 
       <strong className={moneyMatch ? "metric-money" : ""}>
         {moneyMatch ? (
           <>
-            <span className="metric-money-amount">{moneyMatch[1]}</span>
+            <span className={`metric-money-amount metric-money-amount-length-${Math.min(moneyDigits, 12)}`}>{moneyMatch[1]}</span>
             <small className="metric-money-currency">{moneyMatch[2]}</small>
           </>
         ) : displayValue}

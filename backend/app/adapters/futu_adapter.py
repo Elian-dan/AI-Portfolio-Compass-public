@@ -125,6 +125,20 @@ class FutuReadOnlyAdapter:
         finally:
             ctx.close()
 
+    def fetch_kline_snapshot_rows(self, codes: list[str]) -> tuple[list[dict[str, Any]], dict[str, str]]:
+        """Fetch the daily and weekly candles to be persisted by a sync operation."""
+        rows: list[dict[str, Any]] = []
+        errors: dict[str, str] = {}
+        for code in dict.fromkeys(item for item in codes if item):
+            for period, count in (("K_DAY", 120), ("K_WEEK", 104)):
+                result = self.fetch_kline_rows(code, period, count)
+                if result.get("status") != "available":
+                    errors[f"{code}:{period}"] = str(result.get("message") or "未返回 K 线数据")
+                    continue
+                for item in result.get("items", []):
+                    rows.append({"code": code, "period": period, **item})
+        return rows, errors
+
     def fetch_daily_close_after(self, code: str, target: datetime) -> float | None:
         """Return the first daily K-line close on or after target's calendar date."""
         futu = self._import_futu()

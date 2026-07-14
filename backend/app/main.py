@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.adapters.futu_adapter import FutuReadOnlyAdapter
 from app.config import get_settings
 from app.database import engine, get_db, init_db
-from app.models import AIAnalysis, Account, AccountSnapshot, AIWorkflowRun, Alert, DataSourceState, Deal, DecisionCard, NewsItem, PositionLayerOverride, PositionSnapshot, QuoteSummary, TradeReview, UserAction
+from app.models import AIAnalysis, Account, AccountSnapshot, AIWorkflowRun, Alert, DataSourceState, Deal, DecisionCard, KlineSnapshot, NewsItem, PositionLayerOverride, PositionSnapshot, QuoteSummary, TradeReview, UserAction
 from app.schemas import DealSaveRequest, DeleteLocalDataRequest, LayerOverrideRequest, PositionSnapshotSaveRequest
 from app.services.sync import (
     delete_local_data,
@@ -95,6 +95,9 @@ def on_startup() -> None:
 @app.get("/api/health")
 def health(db: Session = Depends(get_db)) -> dict:
     settings = get_settings()
+    demo_mode = settings.workspace == "demo" or (
+        settings.database_url.startswith("sqlite:///") and "demo" in settings.database_url.lower()
+    )
     db_status = "ok"
     try:
         with engine.connect() as conn:
@@ -102,7 +105,7 @@ def health(db: Session = Depends(get_db)) -> dict:
     except Exception as exc:
         db_status = f"error: {str(exc)[:120]}"
 
-    connected, opend_status = _opend_health_with_timeout()
+    connected, opend_status = (False, "演示工作区不连接真实账户") if demo_mode else _opend_health_with_timeout()
     futu_accounts = 0
     futu_account_access = False
     futu_account_message = "OpenD 未连接"
@@ -134,6 +137,8 @@ def health(db: Session = Depends(get_db)) -> dict:
             **local_counts,
             "empty": not any(local_counts.values()),
         },
+        "demo_mode": demo_mode,
+        "workspace": "demo" if demo_mode else "formal",
         "sqlite_encryption_ready": False,
         "ai": {
             "provider": runtime["provider"],
@@ -148,6 +153,13 @@ def health(db: Session = Depends(get_db)) -> dict:
 
 @app.post("/api/sync/manual")
 def manual_sync(db: Session = Depends(get_db)) -> dict:
+    settings = get_settings()
+    if settings.workspace == "demo" or "demo" in settings.database_url.lower():
+        return {
+            "sync_id": "demo_workspace",
+            "status": "已跳过",
+            "message": "演示工作区不会同步真实账户；请切换到正式模式后再同步。",
+        }
     task = run_manual_sync(db)
     return {
         "sync_id": task.sync_id,
@@ -1098,8 +1110,33 @@ def position_kline(
     if items[0].missing_market_code:
         return {"code": code, "status": "missing", "message": "该持仓缺少真实证券代码", "items": []}
     allowed_ktype = ktype if ktype in {"K_DAY", "K_WEEK", "K_MON"} else "K_DAY"
-    result = FutuReadOnlyAdapter().fetch_kline_rows(code, allowed_ktype, count)
-    return {"code": code, "ktype": allowed_ktype, **result}
+    snapshot_time = db.scalar(
+        select(KlineSnapshot.snapshot_time)
+        .where(KlineSnapshot.code == code, KlineSnapshot.period == allowed_ktype)
+        .order_by(KlineSnapshot.snapshot_time.desc())
+        .limit(1)
+    )
+    if not snapshot_time:
+        return {"code": code, "ktype": allowed_ktype, "status": "missing", "message": "未同步 K 线，技术分析已降级。", "items": []}
+    rows = list(
+        db.scalars(
+            select(KlineSnapshot)
+            .where(KlineSnapshot.code == code, KlineSnapshot.period == allowed_ktype, KlineSnapshot.snapshot_time == snapshot_time)
+            .order_by(KlineSnapshot.time_key.desc())
+            .limit(count)
+        ).all()
+    )
+    return {
+        "code": code,
+        "ktype": allowed_ktype,
+        "status": "available" if rows else "missing",
+        "message": "" if rows else "未同步 K 线，技术分析已降级。",
+        "snapshot_time": snapshot_time.isoformat(),
+        "items": [
+            {"time_key": row.time_key, "open": row.open, "close": row.close, "high": row.high, "low": row.low, "volume": row.volume, "turnover": row.turnover}
+            for row in reversed(rows)
+        ],
+    }
 
 
 @app.get("/api/positions/{code:path}")

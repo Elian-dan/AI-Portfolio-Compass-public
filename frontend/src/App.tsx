@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Message } from "@arco-design/web-react";
-import { api, AccountSummary, AIAnalysis, AIWorkflowRun, Dashboard, DecisionCard, HealthStatus, NewsItem, Position, Profile, Review, TradeReviewList } from "./api";
+import { api, AccountSummary, AIAnalysis, AIWorkflowRun, Dashboard, DecisionCard, HealthStatus, NewsItem, Position, Profile, Review, TradeReviewList, WorkspaceMode } from "./api";
 import { ProShell } from "./layout/ProShell";
 import { PageContainer } from "./components/pro";
 import {
@@ -59,6 +59,8 @@ function App() {
   const [maskAssets, setMaskAssets] = useState(() => localStorage.getItem("mask_assets") === "1");
   const [displayCurrency, setDisplayCurrency] = useState("");
   const [theme, setTheme] = useState<AppTheme>(() => localStorage.getItem("app_theme") === "dark" ? "dark" : "light");
+  const [workspace, setWorkspace] = useState<WorkspaceMode>(() => api.workspace());
+  const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
   setAssetMaskEnabled(maskAssets);
 
   const scopedPositions = useMemo(() => scopePositions(positions, selectedAccount), [positions, selectedAccount]);
@@ -127,7 +129,7 @@ function App() {
       const message = error instanceof Error ? error.message : "加载失败";
       setNotice(message.includes("暂时加载失败") ? message : `服务未连接：${message}`);
     });
-  }, [layer, selectedAccount]);
+  }, [layer, selectedAccount, workspace]);
 
   useEffect(() => {
     if (!notice) return;
@@ -175,6 +177,21 @@ function App() {
     confirmResolver.current?.(value);
     confirmResolver.current = null;
     setConfirmDialog(null);
+  }
+
+  function toggleWorkspace() {
+    const next: WorkspaceMode = workspace === "demo" ? "formal" : "demo";
+    setSwitchingWorkspace(true);
+    setSelectedAccount("all");
+    setSelectedCode("");
+    setDetail(null);
+    setDashboard(null);
+    setPositions([]);
+    setAccounts([]);
+    api.setWorkspace(next);
+    setWorkspace(next);
+    setNotice(next === "demo" ? "已进入演示工作区，所有数据均与正式数据隔离" : "已返回正式工作区");
+    window.setTimeout(() => setSwitchingWorkspace(false), 450);
   }
 
   async function refresh() {
@@ -284,6 +301,9 @@ function App() {
           onNavigate={setActive}
           onBack={() => setActive(detailReturnTarget)}
           onAccountChange={setSelectedAccount}
+          workspace={workspace}
+          switchingWorkspace={switchingWorkspace}
+          onToggleWorkspace={toggleWorkspace}
         >
           <PageContainer>{content}</PageContainer>
         </ProShell>

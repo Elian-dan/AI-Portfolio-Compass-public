@@ -10,9 +10,8 @@ from urllib import request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.adapters.futu_adapter import FutuReadOnlyAdapter
 from app.config import get_settings
-from app.models import NewsItem, QuoteSummary
+from app.models import KlineSnapshot, NewsItem, QuoteSummary
 from app.services.profile_workflows import (
     WORKFLOW_TYPES,
     audit_calculation_pack_locally,
@@ -70,7 +69,7 @@ def default_tool_registry() -> ToolRegistry:
     registry.register(AgentTool("get_watchlist", "读取自选股摘要。", get_watchlist))
     registry.register(AgentTool("get_latest_quotes", "读取本地最近行情摘要。", get_latest_quotes))
     registry.register(AgentTool("get_recent_news", "读取本地最近新闻摘要。", get_recent_news))
-    registry.register(AgentTool("get_kline_summary", "通过富途只读接口补查日线/周线 K 线摘要，失败时返回 missing。", get_kline_summary))
+    registry.register(AgentTool("get_kline_summary", "读取本地已同步的日线/周线 K 线快照；无快照时标记技术分析降级。", get_kline_summary))
     registry.register(AgentTool("calculate_portfolio_metrics", "计算组合核心指标和权重口径。", calculate_portfolio_metrics))
     registry.register(AgentTool("calculate_allocation_distribution", "计算资产、货币、主题分布和收益贡献。", calculate_allocation_distribution))
     registry.register(AgentTool("calculate_audit_pack", "生成可审计计算包，作为报告唯一关键数字来源。", calculate_audit_pack))
@@ -151,17 +150,6 @@ def get_latest_quotes(db: Session, account_id: str, args: dict[str, Any], state:
         seen.add(row.code)
         by_code[row.code] = _quote_payload(row.code, row.current_price, row.change_ratio, row.volume, row.quote_time, "local_cache")
 
-    live_error = ""
-    live_codes = quote_codes
-    if live_codes and args.get("live", True) is not False:
-        try:
-            for item in FutuReadOnlyAdapter().fetch_quote_summaries(live_codes):
-                code = str(item.get("code") or "")
-                if code:
-                    by_code[code] = {**item, "source": "futu_opend"}
-        except Exception as exc:
-            live_error = str(exc)[:300]
-
     found = set(by_code)
     missing_codes = [code for code in quote_codes if code not in found]
     status = "ok" if found and not missing_codes else "partial" if found else "missing"
@@ -170,7 +158,7 @@ def get_latest_quotes(db: Session, account_id: str, args: dict[str, Any], state:
         "items": [by_code[code] for code in quote_codes if code in by_code],
         "missing_codes": missing_codes,
         "unsupported_codes": unsupported_codes,
-        "live_error": live_error,
+        "live_error": "",
     }
 
 
@@ -205,11 +193,10 @@ def get_kline_summary(db: Session, account_id: str, args: dict[str, Any], state:
     unsupported_codes = [code for code in requested_codes if code not in codes]
     if not codes:
         return {"status": "missing", "message": "没有可查询 K 线的市场代码", "unsupported_codes": unsupported_codes}
-    try:
-        items = FutuReadOnlyAdapter().fetch_technical_summaries(codes)
-        return {"status": _kline_overall_status(items), "items": items, "unsupported_codes": unsupported_codes}
-    except Exception as exc:
-        return {"status": "missing", "message": str(exc)[:300], "items": {}, "unsupported_codes": unsupported_codes}
+    items = _kline_summaries_from_snapshots(db, codes)
+    status = _kline_overall_status(items)
+    message = "" if status != "missing" else "未同步 K 线，技术分析已降级。"
+    return {"status": status, "message": message, "items": items, "unsupported_codes": unsupported_codes}
 
 
 def calculate_portfolio_metrics(db: Session, account_id: str, _args: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
@@ -464,6 +451,74 @@ def _quote_payload(code: str, current_price: float, change_ratio: float, volume:
         "volume": volume,
         "quote_time": quote_time.isoformat() if quote_time else None,
         "source": source,
+    }
+
+
+def _kline_summaries_from_snapshots(db: Session, codes: list[str]) -> dict[str, dict[str, Any]]:
+    items: dict[str, dict[str, Any]] = {}
+    for code in codes:
+        by_period: dict[str, Any] = {}
+        for period, label in (("K_DAY", "daily"), ("K_WEEK", "weekly")):
+            snapshot_time = db.scalar(
+                select(KlineSnapshot.snapshot_time)
+                .where(KlineSnapshot.code == code, KlineSnapshot.period == period)
+                .order_by(KlineSnapshot.snapshot_time.desc())
+                .limit(1)
+            )
+            if not snapshot_time:
+                by_period[label] = {"status": "missing", "message": "未同步 K 线快照"}
+                continue
+            rows = list(
+                db.scalars(
+                    select(KlineSnapshot)
+                    .where(
+                        KlineSnapshot.code == code,
+                        KlineSnapshot.period == period,
+                        KlineSnapshot.snapshot_time == snapshot_time,
+                    )
+                    .order_by(KlineSnapshot.time_key.asc())
+                ).all()
+            )
+            closes = [row.close for row in rows if row.close > 0]
+            if not closes:
+                by_period[label] = {"status": "missing", "message": "快照中没有有效收盘价"}
+                continue
+            by_period[label] = {
+                **_summarize_snapshot_closes(closes),
+                "snapshot_time": snapshot_time.isoformat(),
+                "period": period,
+                "candle_count": len(closes),
+            }
+        items[code] = by_period
+    return items
+
+
+def _summarize_snapshot_closes(closes: list[float]) -> dict[str, Any]:
+    latest = closes[-1]
+    high = max(closes)
+
+    def average(window: int) -> float | None:
+        return sum(closes[-window:]) / window if len(closes) >= window else None
+
+    def change(window: int) -> float | None:
+        if len(closes) <= window or closes[-window - 1] == 0:
+            return None
+        return latest / closes[-window - 1] - 1
+
+    ma20, ma60, ma120 = average(20), average(60), average(120)
+    return {
+        "status": "available",
+        "latest_close": latest,
+        "ma20": ma20,
+        "ma60": ma60,
+        "ma120": ma120,
+        "change_20": change(20),
+        "change_60": change(60),
+        "drawdown_from_period_high": latest / high - 1 if high else 0,
+        "above_ma20": latest >= ma20 if ma20 is not None else None,
+        "above_ma60": latest >= ma60 if ma60 is not None else None,
+        "above_ma120": latest >= ma120 if ma120 is not None else None,
+        "trend_summary": "上行" if ma20 is not None and latest >= ma20 else "偏弱" if ma20 is not None else "样本不足",
     }
 
 

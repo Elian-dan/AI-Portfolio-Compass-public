@@ -145,6 +145,25 @@ class QuoteSummary(Base):
     sync_id: Mapped[str] = mapped_column(String, index=True)
 
 
+class KlineSnapshot(Base):
+    __tablename__ = "kline_snapshots"
+    __table_args__ = (UniqueConstraint("code", "period", "time_key", "snapshot_time", name="uq_kline_snapshot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String, index=True)
+    provider: Mapped[str] = mapped_column(String, default="futu", index=True)
+    period: Mapped[str] = mapped_column(String, index=True)
+    time_key: Mapped[str] = mapped_column(String, index=True)
+    open: Mapped[float] = mapped_column(Float, default=0)
+    close: Mapped[float] = mapped_column(Float, default=0)
+    high: Mapped[float] = mapped_column(Float, default=0)
+    low: Mapped[float] = mapped_column(Float, default=0)
+    volume: Mapped[float] = mapped_column(Float, default=0)
+    turnover: Mapped[float] = mapped_column(Float, default=0)
+    snapshot_time: Mapped[datetime] = mapped_column(DateTime, index=True)
+    sync_id: Mapped[str] = mapped_column(String, index=True)
+
+
 class NewsItem(Base):
     __tablename__ = "news_items"
 

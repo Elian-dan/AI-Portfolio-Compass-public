@@ -12,7 +12,7 @@ from sqlalchemy import delete  # noqa: E402
 
 from app.database import SessionLocal  # noqa: E402
 from app.main import app, _aggregate_positions  # noqa: E402
-from app.models import AIRuntimeConfig, Account, AccountSnapshot, Deal, DecisionCard, InvestorPreference, PositionLayerOverride, PositionSnapshot  # noqa: E402
+from app.models import AIRuntimeConfig, Account, AccountSnapshot, Deal, DecisionCard, InvestorPreference, KlineSnapshot, PositionLayerOverride, PositionSnapshot  # noqa: E402
 
 
 def test_health_contract():
@@ -250,29 +250,15 @@ def test_all_account_position_detail_with_decision_card():
             _cleanup_account(account_id)
 
 
-def test_position_kline_contract_uses_futu_adapter(monkeypatch):
+def test_position_kline_contract_uses_local_snapshot():
     account_id = "__kline_contract_account__"
     code = "US.QQQ"
     snapshot_time = datetime(2026, 7, 4, 10, 0)
 
-    class FakeFutuAdapter:
-        def fetch_kline_rows(self, requested_code, ktype, count):
-            assert requested_code == code
-            assert ktype == "K_DAY"
-            assert count == 30
-            return {
-                "status": "available",
-                "message": "",
-                "items": [
-                    {"time_key": "2026-07-01", "open": 100, "close": 101, "high": 102, "low": 99, "volume": 1200, "turnover": 121000},
-                    {"time_key": "2026-07-02", "open": 101, "close": 100, "high": 103, "low": 98, "volume": 900, "turnover": 90000},
-                ],
-            }
-
-    monkeypatch.setattr("app.main.FutuReadOnlyAdapter", FakeFutuAdapter)
     try:
         _create_account(account_id)
         with SessionLocal() as db:
+            db.execute(delete(KlineSnapshot).where(KlineSnapshot.code == code, KlineSnapshot.period == "K_DAY", KlineSnapshot.snapshot_time == snapshot_time))
             db.add(
                 PositionSnapshot(
                     account_id=account_id,
@@ -297,6 +283,10 @@ def test_position_kline_contract_uses_futu_adapter(monkeypatch):
                     sync_id="kline_contract_position",
                 )
             )
+            db.add_all([
+                KlineSnapshot(code=code, provider="futu", period="K_DAY", time_key="2026-07-01", open=100, close=101, high=102, low=99, volume=1200, turnover=121000, snapshot_time=snapshot_time, sync_id="kline_contract"),
+                KlineSnapshot(code=code, provider="futu", period="K_DAY", time_key="2026-07-02", open=101, close=100, high=103, low=98, volume=900, turnover=90000, snapshot_time=snapshot_time, sync_id="kline_contract"),
+            ])
             db.commit()
 
         with TestClient(app) as client:
@@ -308,6 +298,9 @@ def test_position_kline_contract_uses_futu_adapter(monkeypatch):
         assert data["status"] == "available"
         assert data["items"][0]["close"] == 101
     finally:
+        with SessionLocal() as db:
+            db.execute(delete(KlineSnapshot).where(KlineSnapshot.code == code, KlineSnapshot.period == "K_DAY", KlineSnapshot.snapshot_time == snapshot_time))
+            db.commit()
         _cleanup_account(account_id)
 
 

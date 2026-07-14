@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.database import Base
-from app.models import AIWorkflowRun, AccountSnapshot, PositionSnapshot, QuoteSummary
+from app.models import AIWorkflowRun, AccountSnapshot, KlineSnapshot, PositionSnapshot, QuoteSummary
 from app.services import profile_agent_tools
 from app.services.profile_agent import _next_action, _stream_chaptered_deepseek_report, stream_agent_workflow
 from app.services.profile_agent_tools import SKILL_FILES, annotate_model_derived_percentages, default_tool_registry, validate_report
@@ -132,21 +132,7 @@ def test_tool_registry_rejects_unknown_tool():
     assert "place_order" in result["error"]
 
 
-def test_get_latest_quotes_fetches_live_futu_and_marks_unsupported(monkeypatch):
-    class FakeAdapter:
-        def fetch_quote_summaries(self, codes):
-            assert codes == ["US.QQQ"]
-            return [
-                {
-                    "code": "US.QQQ",
-                    "current_price": 123.45,
-                    "change_ratio": 0.0123,
-                    "volume": 1000,
-                    "quote_time": datetime.now(timezone.utc),
-                }
-            ]
-
-    monkeypatch.setattr(profile_agent_tools, "FutuReadOnlyAdapter", lambda: FakeAdapter())
+def test_get_latest_quotes_uses_local_snapshot_and_marks_unsupported():
     db = _session()
     db.add(
         QuoteSummary(
@@ -166,8 +152,8 @@ def test_get_latest_quotes_fetches_live_futu_and_marks_unsupported(monkeypatch):
     result = default_tool_registry().run(db, "all", "get_latest_quotes", {"codes": ["US.QQQ", "FUND.006479"]}, {})
 
     assert result["status"] == "ok"
-    assert result["items"][0]["current_price"] == 123.45
-    assert result["items"][0]["source"] == "futu_opend"
+    assert result["items"][0]["current_price"] == 100
+    assert result["items"][0]["source"] == "local_cache"
     assert result["unsupported_codes"] == ["FUND.006479"]
 
 

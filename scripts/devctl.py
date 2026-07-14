@@ -22,8 +22,10 @@ LOG_DIR = RUNTIME_DIR / "logs"
 SUPERVISOR_PID = RUNTIME_DIR / "supervisor.pid"
 STATE_FILE = RUNTIME_DIR / "state.json"
 
-BACKEND_URL = "http://127.0.0.1:8000/api/health"
-FRONTEND_PORT = "4400"
+BACKEND_URL = "http://127.0.0.1:8010/api/health"
+DEMO_BACKEND_URL = "http://127.0.0.1:8011/api/health"
+DEMO_DATABASE_URL = f"sqlite:///{ROOT / 'data' / 'ai_trader_demo.db'}"
+FRONTEND_PORT = "4410"
 FRONTEND_URL = f"http://127.0.0.1:{FRONTEND_PORT}/"
 
 
@@ -59,6 +61,8 @@ def start() -> int:
         for item in missing:
             print(item)
         return 1
+
+    ensure_demo_database()
 
     log_path = LOG_DIR / "supervisor.log"
     with log_path.open("ab") as log:
@@ -116,28 +120,30 @@ def status() -> int:
     checks = check_services()
     print(f"监控进程：{'运行中' if supervisor_running() else '未运行'}")
     print(f"前端 {FRONTEND_PORT}：{checks['frontend']['status']} - {checks['frontend']['message']}")
-    print(f"后端 8000：{checks['backend']['status']} - {checks['backend']['message']}")
+    print(f"后端 8010：{checks['backend']['status']} - {checks['backend']['message']}")
+    print(f"演示后端 8011：{checks['backend_demo']['status']} - {checks['backend_demo']['message']}")
     if state:
         print(f"最近心跳：{state.get('updated_at', '未知')}")
-        print(f"后端重启次数：{state.get('backend_restarts', 0)}")
+        print(f"正式后端重启次数：{state.get('backend_restarts', 0)}")
+        print(f"演示后端重启次数：{state.get('backend_demo_restarts', 0)}")
         print(f"前端重启次数：{state.get('frontend_restarts', 0)}")
     print(f"访问地址：http://127.0.0.1:{FRONTEND_PORT}/")
-    return 0 if checks["frontend"]["ok"] and checks["backend"]["ok"] else 1
+    return 0 if all(item["ok"] for item in checks.values()) else 1
 
 
 def health(print_json: bool = False) -> int:
     checks = check_services()
     if print_json:
         print(json.dumps(checks, ensure_ascii=False, indent=2))
-    return 0 if checks["frontend"]["ok"] and checks["backend"]["ok"] else 1
+    return 0 if all(item["ok"] for item in checks.values()) else 1
 
 
 def supervise() -> int:
     ensure_runtime()
     SUPERVISOR_PID.write_text(str(os.getpid()), encoding="utf-8")
-    children: dict[str, subprocess.Popen[bytes] | None] = {"backend": None, "frontend": None}
-    restart_counts = {"backend": 0, "frontend": 0}
-    failures = {"backend": 0, "frontend": 0}
+    children: dict[str, subprocess.Popen[bytes] | None] = {"backend": None, "backend_demo": None, "frontend": None}
+    restart_counts = {"backend": 0, "backend_demo": 0, "frontend": 0}
+    failures = {"backend": 0, "backend_demo": 0, "frontend": 0}
     stopping = False
 
     def handle_stop(_signum: int, _frame: Any) -> None:
@@ -149,14 +155,16 @@ def supervise() -> int:
 
     try:
         children["backend"] = launch_backend()
+        children["backend_demo"] = launch_backend(demo=True)
         children["frontend"] = launch_frontend()
         restart_counts["backend"] += 1
+        restart_counts["backend_demo"] += 1
         restart_counts["frontend"] += 1
         started_at = time.time()
 
         while not stopping:
             time.sleep(5)
-            for name in ("backend", "frontend"):
+            for name in ("backend", "backend_demo", "frontend"):
                 child = children[name]
                 if child is None or child.poll() is not None:
                     children[name] = relaunch(name, children.get(name))
@@ -182,12 +190,22 @@ def supervise() -> int:
     return 0
 
 
-def launch_backend() -> subprocess.Popen[bytes]:
+def launch_backend(demo: bool = False) -> subprocess.Popen[bytes]:
     python_path = BACKEND_DIR / ".venv" / "bin" / "python"
+    name = "backend_demo" if demo else "backend"
+    port = "8011" if demo else "8010"
+    env = os.environ.copy()
+    env["APP_WORKSPACE"] = "demo" if demo else "formal"
+    if demo:
+        env["DATABASE_URL"] = DEMO_DATABASE_URL
+        env["FUTU_TRD_ENV"] = "SIMULATE"
+    elif "demo" in env.get("DATABASE_URL", "").lower():
+        env.pop("DATABASE_URL", None)
     return launch(
-        "backend",
-        [str(python_path), "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+        name,
+        [str(python_path), "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", port],
         BACKEND_DIR,
+        env=env,
     )
 
 
@@ -195,17 +213,21 @@ def launch_frontend() -> subprocess.Popen[bytes]:
     return launch("frontend", ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", FRONTEND_PORT], FRONTEND_DIR)
 
 
-def launch(name: str, command: list[str], cwd: Path) -> subprocess.Popen[bytes]:
+def launch(name: str, command: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.Popen[bytes]:
     ensure_runtime()
     log_path = LOG_DIR / f"{name}.log"
     log = log_path.open("ab")
-    return subprocess.Popen(command, cwd=str(cwd), stdout=log, stderr=log, start_new_session=True)
+    return subprocess.Popen(command, cwd=str(cwd), stdout=log, stderr=log, start_new_session=True, env=env)
 
 
 def relaunch(name: str, child: subprocess.Popen[bytes] | None) -> subprocess.Popen[bytes]:
     terminate_child(child)
     time.sleep(1)
-    return launch_backend() if name == "backend" else launch_frontend()
+    if name == "backend":
+        return launch_backend()
+    if name == "backend_demo":
+        return launch_backend(demo=True)
+    return launch_frontend()
 
 
 def terminate_child(child: subprocess.Popen[bytes] | None) -> None:
@@ -226,15 +248,19 @@ def terminate_child(child: subprocess.Popen[bytes] | None) -> None:
 
 
 def check_services() -> dict[str, dict[str, Any]]:
-    return {"frontend": check_one("frontend"), "backend": check_one("backend")}
+    return {
+        "frontend": check_one("frontend"),
+        "backend": check_one("backend"),
+        "backend_demo": check_one("backend_demo"),
+    }
 
 
 def check_one(name: str) -> dict[str, Any]:
-    url = FRONTEND_URL if name == "frontend" else BACKEND_URL
+    url = FRONTEND_URL if name == "frontend" else DEMO_BACKEND_URL if name == "backend_demo" else BACKEND_URL
     try:
         with request.urlopen(url, timeout=4) as response:
             body = response.read().decode("utf-8", errors="ignore")
-            if name == "backend":
+            if name in {"backend", "backend_demo"}:
                 data = json.loads(body)
                 message = f"service={data.get('service')}, opend={data.get('opend')}, ai={data.get('ai', {}).get('configured')}"
             else:
@@ -255,6 +281,19 @@ def missing_dependencies() -> list[str]:
 
 def ensure_runtime() -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_demo_database() -> None:
+    demo_path = ROOT / "data" / "ai_trader_demo.db"
+    if demo_path.exists():
+        return
+    python_path = BACKEND_DIR / ".venv" / "bin" / "python"
+    env = os.environ.copy()
+    env["DATABASE_URL"] = DEMO_DATABASE_URL
+    env["APP_WORKSPACE"] = "demo"
+    result = subprocess.run([str(python_path), str(ROOT / "scripts" / "seed_demo.py")], cwd=str(ROOT), env=env)
+    if result.returncode != 0:
+        raise RuntimeError("演示数据库初始化失败")
 
 
 def supervisor_running() -> bool:
@@ -293,6 +332,7 @@ def write_state(restart_counts: dict[str, int]) -> None:
             {
                 "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "backend_restarts": restart_counts["backend"],
+                "backend_demo_restarts": restart_counts["backend_demo"],
                 "frontend_restarts": restart_counts["frontend"],
             },
             ensure_ascii=False,

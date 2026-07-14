@@ -77,6 +77,33 @@ a {
   background: var(--app-page-bg);
 }
 
+.demo-mode-banner {
+  padding: 8px 24px;
+  color: #7a4d00;
+  background: #fff3cd;
+  border-bottom: 1px solid #f3d98b;
+  font-size: 12px;
+  text-align: center;
+}
+
+.workspace-mode-toggle.arco-btn {
+  min-width: 88px;
+  font-weight: 600;
+  border-width: 1px;
+}
+
+.workspace-mode-toggle.is-formal.arco-btn {
+  color: rgb(var(--arcoblue-6));
+  background: rgb(var(--arcoblue-1));
+  border-color: rgb(var(--arcoblue-3));
+}
+
+.workspace-mode-toggle.is-demo.arco-btn {
+  color: rgb(var(--orange-7));
+  background: rgb(var(--orange-1));
+  border-color: rgb(var(--orange-4));
+}
+
 .pro-sider {
   position: sticky;
   top: 0;
@@ -713,6 +740,7 @@ ol:last-child {
   flex-direction: column;
   justify-content: flex-start;
   padding: var(--space-4) var(--space-3);
+  container-type: inline-size;
 }
 
 .checkup-metric-grid .metric strong {
@@ -721,14 +749,28 @@ ol:last-child {
 }
 
 .checkup-metric-grid .metric-money {
-  grid-template-columns: minmax(0, 1fr) 42px;
+  display: block;
 }
 
 .checkup-metric-grid .metric-money-amount {
-  font-size: 22px;
+  display: block;
+  width: 100%;
+  overflow: visible;
+  font-size: clamp(18px, 10cqw, 30px);
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.checkup-metric-grid .metric-money-amount-length-10,
+.checkup-metric-grid .metric-money-amount-length-11,
+.checkup-metric-grid .metric-money-amount-length-12 {
+  font-size: clamp(16px, 8.3cqw, 25px);
 }
 
 .checkup-metric-grid .metric-money-currency {
+  margin-top: 4px;
   font-size: var(--text-sm);
 }
 

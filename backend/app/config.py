@@ -19,6 +19,7 @@ if load_dotenv:
 
 class Settings:
     app_env: str = os.getenv("APP_ENV", "development")
+    workspace: str = os.getenv("APP_WORKSPACE", "formal").strip().lower()
     database_url: str = os.getenv("DATABASE_URL") or f"sqlite:///{DATA_DIR / 'ai_trader.db'}"
     db_encryption_key: str = os.getenv("DB_ENCRYPTION_KEY", "")
     futu_host: str = os.getenv("FUTU_OPEND_HOST", "127.0.0.1")
